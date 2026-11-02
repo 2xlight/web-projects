@@ -165,7 +165,17 @@ const pick = arr => arr[Math.floor(Math.random() * arr.length)];
 function pickReply(raw){
   const text = asWords(raw);
   const hits = BANK.filter(c => c.keys.some(k => text.includes(k)));
-  return pick(hits.length ? pick(hits).entries : fallbackBank);   // trùng nhiều danh mục: chọn ngẫu nhiên (giữ như bản 01)
+
+  // Không có nhóm từ khóa phù hợp
+  if (!hits.length) return pick(fallbackBank);
+
+  // Chọn ngẫu nhiên một nhóm khớp
+  const category = pick(hits);
+
+  // Nếu entries là function thì gọi function
+  return typeof category.entries === "function"
+    ? category.entries()
+    : pick(category.entries);
 }
 
 // [J4] Tham chiếu DOM + helper dựng dòng/gõ chữ + cơ chế hủy tác vụ dở khi bấm nút reset
