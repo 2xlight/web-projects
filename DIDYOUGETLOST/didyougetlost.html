@@ -115,17 +115,40 @@ const CONFIG = {
   chatExitMsg: "RESET for again.",
 };
 
-// [J2] Dữ liệu: danh mục từ khóa -> câu đáp. [FIX-14] field `fr` đổi thành `reply` (nội dung hiện không phải tiếng Pháp).
-// keywords: gõ không dấu/chữ thường, khớp theo TỪ NGUYÊN VẸN (xem J3). Nội dung câu giữ nguyên như bản 01.
 const phraseBank = [
-  { name: "xinchao",  keywords: ["chao","hi","bonjour","hello","cc","chao ban","hallo", "wtf"],
-    entries: [{ reply: "Hallo, was ist der neu?", vi: "Chàoo, có gì mới à?" }] },
-  { name: "thoitiet", keywords: ["thoi tiet","mua","nang","lanh","nong","weather"],
-    entries: [{ reply: "Erm...", vi: "À..." }] },
-  { name: "cv",       keywords: ["cong viec","lam viec","di lam","project","work","deadline","sep","du an"],
-    entries: [{ reply: "Ich bin auch~ Sehr muede... Bist du bestchaeftig?", vi: "Tui cũng vậy, mệt vãi ò... Bận lắm à?" }] },
-  { name: "hacker",   keywords: ["hack","pentest","mat khau","password","may tinh"],
-    entries: [{ reply: "Oh.", vi: "Ngầu à nhen." }] }
+  { name: "xinchao",  
+    keywords: ["chao","hi","bonjour","hello","cc","hola","hallo", "wtf"],
+    // Dùng hàm để mỗi lần gọi entries() nó tự bốc ngẫu nhiên 1 cái
+    entries: () => getRandom([
+      { reply: "Hallo, was ist der neu?", vi: "Chàoo, có gì mới à?" },
+      { reply: "Ah, du bist wieder da.", vi: "À, cậu lại đến rồi." },
+      { reply: "Willkommen zurück.", vi: "Chào mừng trở lại." }
+    ])
+  },
+ { 
+    name: "thoitiet", 
+    keywords: ["thoi tiet","mua","nang","lanh","nong","weather"],
+    entries: () => getRandom([
+      { reply: "Erm...", vi: "À..." },
+      { reply: "Das Wetter draußen ist egal, oder?", vi: "Thời tiết bên ngoài đâu có quan trọng, đúng không?" }
+    ])
+  },
+  { 
+    name: "cv",       
+    keywords: ["cong viec","lam viec","di lam","project","work","deadline","sep","du an"],
+    entries: () => getRandom([
+      { reply: "Ich bin auch~ Sehr muede... Bist du beschaeftig?", vi: "Tui cũng vậy, mệt vãi ò... Bận lắm à?" },
+      { reply: "Arbeiten, arbeiten... Vergesst nicht zu atmen.", vi: "Làm việc, làm việc... Đừng quên thở đấy." }
+    ])
+  },
+  { 
+    name: "hacker",   
+    keywords: ["hack","pentest","mat khau","password","may tinh"],
+    entries: () => getRandom([
+      { reply: "Oh.", vi: "Ngầu à nhen." },
+      { reply: "Sicherheit ist nur eine Illusion.", vi: "Bảo mật chỉ là một sự ảo tưởng thôi." }
+    ])
+  }
 ];
 const fallbackBank = [   // dùng khi không danh mục nào khớp
   { reply: "...", vi: "..." }, { reply: "?", vi: "?" }, { reply: "!!", vi: "!!" },
