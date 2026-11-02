@@ -19,7 +19,7 @@ body{margin:0;padding:20px;min-height:100vh;min-height:100dvh;display:flex;align
   background:var(--paper);color:var(--ink);font-family:var(--font)}
 
 /* Terminal + thanh trên (tên + nút) + Header, phụ đề */
-.terminal{width:100%;max-width:760px;background:var(--paper);border:2px solid var(--ink);padding:22px 24px 18px}
+.terminal{width:100%;max-width:1000px;background:var(--paper);border:2px solid var(--ink);padding:28px 32px 22px}
 .topbar{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--ink);
   padding-bottom:8px;margin-bottom:14px;font-size:12px;letter-spacing:.06em;color:var(--grey)}
 .topbar b{color:var(--ink)}
@@ -31,7 +31,7 @@ h1{font-size:48px;line-height:1;letter-spacing:.03em;margin:2px 0}
 .subtitle{font-size:13px;color:var(--grey);margin-bottom:16px}
 
 /* Vùng log cuộn + kiểu từng loại dòng (JS chỉ gắn class, không gắn style) */
-#log{height:320px;overflow-y:auto;padding-right:6px;margin-bottom:10px;font-size:14.5px;line-height:1.55;
+#log{height:480px;overflow-y:auto;padding-right:6px;margin-bottom:10px;font-size:14.5px;line-height:1.55;
   scrollbar-width:thin;scrollbar-color:var(--ink) var(--paper)}
 /* overflow-wrap */
 .line{white-space:pre-wrap;overflow-wrap:anywhere;margin-bottom:2px}
@@ -74,30 +74,45 @@ h1{font-size:48px;line-height:1;letter-spacing:.03em;margin:2px 0}
 </div>
 
 <script>
-// [J1] CONFIG: mọi chuỗi/độ trễ do JS tạo ra nằm ở đây. [FIX-14] trước đây rải rác trong hàm.
+
+// Hàm bổ trợ lấy ngẫu nhiên 1 phần tử trong mảng
+const getRandom = arr => arr[Math.floor(Math.random() * arr.length)];
+
 const CONFIG = {
-  bootLines: ["HALLO,", "HAVE A NICE DAY. :)"],
+  bootLines: ["Hello,", "You've wandered quite far, anyway: Welcome."],
   hint: "Text and Enter.",
-  youTag: "YOU > ",
-  WHATWEBTag: "ARES > ",
+  youTag: "WHOAMI > ",
+  WHATWEBTag: "STRAW > ",
   noteArrow: "→ ",
   clockLabel: "TIME TO CONNECTION",
   speedBoot: 14, speedReply: 18,   // ms mỗi ký tự
   thinkDelay: 300, bootPause: 180,  // ms
 
-  defaultName: "User",
-  namePrompt: "What should I call you, user?",
-  nameGreeting: name => `${name} ? I appreciate that, welcome ${name}.`,
-  nameChanged: name => `Your name is "${name}".`,
-  unknownCommand: cmd => `"/${cmd}" is invalid, but (/help) is valid.`,
-  helpHeader: "Command:",
-  historyEmpty: "History is empty.",
-  gameHint: "TEXT and ENTER. (/exit for EXIT)",
-  gameInvalidChoice: name => `Tch... invalid choice, ${name}.`,
-  gameLocked: "I will meet you tommorow, haha.",
-  gameQuit: "You get a kickass, just can chat now.",
-  gameFarewell: name => `Cya, ${name}.`,
-  chatExitMsg: "Verbindung kappen. RESET for again.",
+  defaultName: "WHOAMI",
+  namePrompt: "STRAW > Who are you?",
+  nameGreeting: name => {
+    const list = [
+      `STRAW > No one knows who they are in this universe. But I know your name is ${name}, interesting.`,
+      `STRAW > So this is how I and you call you, ${name}.`
+    ];
+    return getRandom(list);
+  },
+  nameChanged: name => `STRAW > You have redefined yourself: ${name}.`,
+  unknownCommand: cmd => `STRAW > "/${cmd}" is invalid.`,
+  helpHeader: "Command List:",
+  historyEmpty: "No history found.",
+  gameHint: "Enter a number and press Enter. (Type /exit to quit.)",
+  gameInvalidChoice: name => `Invalid choice.`,
+  gameLocked: () => {
+    const list = [
+      "I will see you tomorrow, okay?",
+      "Please wait until tomorrow."
+    ];
+    return getRandom(list);
+  },
+  gameQuit: name => `Goodbye, ${name}.`,
+  gameFarewell: name => `See you later, ${name}.`,
+  chatExitMsg: "RESET for again.",
 };
 
 // [J2] Dữ liệu: danh mục từ khóa -> câu đáp. [FIX-14] field `fr` đổi thành `reply` (nội dung hiện không phải tiếng Pháp).
@@ -117,9 +132,7 @@ const fallbackBank = [   // dùng khi không danh mục nào khớp
   { reply: "@@", vi: "Ok, then." }, { reply: "Hmmmm.", vi: "Hmmmmmmmmmm." }
 ];
 
-// [J3] So khớp: chuẩn hóa -> tách từ -> tìm cụm từ khóa -> chọn ngẫu nhiên.
-// [FIX-10] Bản cũ dùng includes() trên chuỗi con: "người"->"ngu", "ghi"->"hi", "nhiều"->"hi" đều khớp nhầm.
-// Nay đệm khoảng trắng hai đầu và so cả TỪ: " nguoi ta " không chứa " ngu ".
+
 function normalize(s){   // bỏ dấu + chữ thường (đã bỏ replace(/Đ/) dư vì toLowerCase đã đổi Đ -> đ)
   return s.toLowerCase().replace(/đ/g, "d").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
