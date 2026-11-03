@@ -92,18 +92,18 @@ const CONFIG = {
   namePrompt: "STRAW > Who are you?",
   nameGreeting: name => {
     const list = [
-      `STRAW > No one knows who they are in this universe. But I know your name is ${name}, interesting.`,
-      `STRAW > So this is how I and you call you, ${name}.`
+      `No one knows who they are in this universe. But I know your name is ${name}, interesting.`,
+      `So this is how I and you call you, ${name}.`
     ];
     return getRandom(list);
   },
-  nameChanged: name => `STRAW > You have redefined yourself: ${name}.`,
+  nameChanged: name => `You have redefined yourself: ${name}.`,
   unknownCommand: cmd => `STRAW > "/${cmd}" is invalid.`,
   helpHeader: "Command List:",
   historyEmpty: "No history found.",
-  gameHint: "Enter a number and press Enter. (Type /exit to quit.)",
+  gameHint: "Enter a number and press Enter.(or /exit)",
   gameInvalidChoice: name => `Invalid choice.`,
-  gameLocked: () => {
+  get gameLocked() {
     const list = [
       "I will see you tomorrow, okay?",
       "Please wait until tomorrow."
@@ -251,18 +251,18 @@ function setName(newName){   // dùng cho lệnh /name khi đang chat, khác v�
 // [CMD1] Mọi tin nhắn bắt đầu bằng "/" được coi là LỆNH thay vì chat thường —
 // MỚI. Cú pháp: /tên_lệnh tham_số... Thêm lệnh mới = thêm một mục vào đây.
 const COMMANDS = {
-  help:    { desc: "Command list.",
+  help:    { desc: "Command List:",
              run: () => { addLine("sys", CONFIG.helpHeader);
                            Object.entries(COMMANDS).forEach(([k, v]) => addLine("sys", `  /${k} — ${v.desc}`)); } },
-  name:    { desc: "Name changing. /name <new-name>, or just nothing, whatever.",
+  name:    { desc: "Name changing (/name <new-name>).",
              run: args => setName(args.join(" ")) },
-  clear:   { desc: "Clear your log (not for history)",
+  clear:   { desc: "Clear your log.",
              run: () => log.replaceChildren() },
-  history: { desc: "Watching n history lines mostly, default is 10. /history 20",
+  history: { desc: "History default 10 lines.",
              run: args => showHistory(Number(args[0]) || 10) },
-  game:    { desc: "Start game...  haha.",
+  game:    { desc: "Start game.",
              run: () => startGame() },
-  exit:    { desc: "Bye bye chatting~ (not for minigame — just /exit while playing)",
+  exit:    { desc: "Goodbye.",
              run: () => { addLine("sys", CONFIG.chatExitMsg); inputRow.classList.remove("ready"); userInput.disabled = true; } },
 };
 function runCommand(raw){
