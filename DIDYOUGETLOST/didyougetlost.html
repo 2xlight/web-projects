@@ -82,7 +82,7 @@ const CONFIG = {
   bootLines: ["Hello,", "You've wandered quite far, anyway: Welcome."],
   hint: "Text and Enter.",
   youTag: "WHOAMI > ",
-  WHATWEBTag: "STRAW > ",
+  DYGLTag: "STRAW > ",
   noteArrow: "→ ",
   clockLabel: "TIME TO CONNECTION",
   speedBoot: 14, speedReply: 18,   // ms mỗi ký tự
@@ -122,7 +122,8 @@ const phraseBank = [
     entries: () => getRandom([
       { reply: "Hallo, was ist der neu?", vi: "Chàoo, có gì mới à?" },
       { reply: "Ah, du bist wieder da.", vi: "À, cậu lại đến rồi." },
-      { reply: "Willkommen zurück.", vi: "Chào mừng trở lại." }
+      { reply: "Willkommen zurück.", vi: "Chào mừng trở lại." },
+      { reply: "Hmmmm... this really not rickroll: <a href=\"https://youtu.be/dQw4w9WgXcQ\" target=\"_blank\">[rickroll]</a>", vi:"No chac chan khph rickroll."}
     ])
   },
  { 
@@ -187,12 +188,16 @@ const toBottom = () => { log.scrollTop = log.scrollHeight; };
 let session = 0;   // [FIX-11] tăng mỗi lần reset; tác vụ async cũ thấy sid khác session thì tự dừng
 function span(cls, text){ const s = document.createElement("span"); s.className = cls; s.textContent = text; return s; }
 function addLine(cls, text = ""){ const d = document.createElement("div"); d.className = "line " + cls; d.textContent = text; log.append(d); toBottom(); return d; }
-async function typeInto(el, text, speed, sid){   // [FIX-13] một hàm gõ chữ thay cho hai vòng for lặp
-  if (reducedMotion()){ el.textContent = text; return sid === session; }
+async function typeInto(el, text, speed, sid){   
+  if (reducedMotion()){ el.innerHTML = text; return sid === session; }
   for (let i = 1; i <= text.length; i++){
     if (sid !== session) return false;
     el.textContent = text.slice(0, i); toBottom(); await sleep(speed);
   }
+  if (sid === session) {
+    el.innerHTML = text;
+  }
+
   return sid === session;
 }
 
@@ -205,7 +210,7 @@ function setMode(next){
     "/help for command or just chatting... :v";
 }
 
-const DB_PREFIX = "WHATWEB:";
+const DB_PREFIX = "DYGL:";
 const Store = {
   get(key, fallback = null){
     try { const v = localStorage.getItem(DB_PREFIX + key); return v === null ? fallback : JSON.parse(v); }
@@ -410,11 +415,11 @@ async function handleSubmit(ev){
   logMessage(Store.get("name", CONFIG.defaultName), text);   // [DB2] chỉ log chat thật, không log lệnh
   await sleep(CONFIG.thinkDelay);
   if (sid !== session) return;
-  const reply = pickReply(text), line = addLine("WHATWEB"), main = span("reply-main", "");
-  line.append(span("tag", CONFIG.WHATWEBTag), main);
+  const reply = pickReply(text), line = addLine("DYGL"), main = span("reply-main", "");
+  line.append(span("tag", CONFIG.DYGLTag), main);
   if (!(await typeInto(main, reply.reply, CONFIG.speedReply, sid))) return;
   addLine("reply-note", CONFIG.noteArrow + reply.vi);
-  logMessage("WHATWEB", reply.reply);
+  logMessage("DYGL", reply.reply);
   userInput.disabled = false; userInput.focus();
 }
 
