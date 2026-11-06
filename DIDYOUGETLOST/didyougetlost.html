@@ -83,7 +83,7 @@ const CONFIG = {
   hint: "Text and Enter.",
   youTag: "WHOAMI > ",
   DYGLTag: "STRAW > ",
-  noteArrow: "→ ",
+  noteArrow: "VI > ",
   clockLabel: "TIME TO CONNECTION",
   speedBoot: 14, speedReply: 18,   // ms mỗi ký tự
   thinkDelay: 300, bootPause: 180,  // ms
@@ -161,22 +161,26 @@ function normalize(s){   // bỏ dấu + chữ thường (đã bỏ replace(/Đ/
   return s.toLowerCase().replace(/đ/g, "d").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 const asWords = s => " " + normalize(s).replace(/[^\p{L}\p{N}]+/gu, " ").trim() + " ";
-const BANK = phraseBank.map(c => ({ ...c, keys: c.keywords.map(asWords) }));   // chuẩn hóa từ khóa 1 lần
-const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+let BANK = []; // Chỉ khai báo BANK một lần; refreshBank() sẽ cập nhật mảng này.
+
 function pickReply(raw){
   const text = asWords(raw);
-  const hits = BANK.filter(c => c.keys.some(k => text.includes(k)));
+  const hits = BANK.filter(category => category.keys.some(key => text.includes(key)));
 
-  // Không có nhóm từ khóa phù hợp
-  if (!hits.length) return pick(fallbackBank);
+  // Không có nhóm từ khóa phù hợp: chọn câu dự phòng hoặc câu người dùng tự thêm.
+  if (!hits.length) {
+    const savedCustom = Store.get("custom_phrases", []);
+    const customReplies = Array.isArray(savedCustom) ? savedCustom : [];
+    return getRandom([...fallbackBank, ...customReplies]);
+  }
 
-  // Chọn ngẫu nhiên một nhóm khớp
-  const category = pick(hits);
+  // Có thể có nhiều nhóm cùng khớp; chọn ngẫu nhiên một nhóm.
+  const category = getRandom(hits);
 
-  // Nếu entries là function thì gọi function
+  // entries có thể là hàm trả về một câu ngẫu nhiên hoặc một mảng câu.
   return typeof category.entries === "function"
     ? category.entries()
-    : pick(category.entries);
+    : getRandom(category.entries);
 }
 
 // [J4] Tham chiếu DOM + helper dựng dòng/gõ chữ + cơ chế hủy tác vụ dở khi bấm nút reset
@@ -188,14 +192,22 @@ const toBottom = () => { log.scrollTop = log.scrollHeight; };
 let session = 0;   // [FIX-11] tăng mỗi lần reset; tác vụ async cũ thấy sid khác session thì tự dừng
 function span(cls, text){ const s = document.createElement("span"); s.className = cls; s.textContent = text; return s; }
 function addLine(cls, text = ""){ const d = document.createElement("div"); d.className = "line " + cls; d.textContent = text; log.append(d); toBottom(); return d; }
-async function typeInto(el, text, speed, sid){   
-  if (reducedMotion()){ el.innerHTML = text; return sid === session; }
-  for (let i = 1; i <= text.length; i++){
-    if (sid !== session) return false;
-    el.textContent = text.slice(0, i); toBottom(); await sleep(speed);
+async function typeInto(el, text, speed, sid){
+  const safeText = String(text ?? "");
+  if (sid !== session) return false;
+
+  // prefers-reduced-motion: hiện toàn bộ chữ ngay, nhưng vẫn dùng textContent.
+  if (reducedMotion()) {
+    el.textContent = safeText;
+    toBottom();
+    return sid === session;
   }
-  if (sid === session) {
-    el.innerHTML = text;
+
+  for (let i = 1; i <= safeText.length; i++) {
+    if (sid !== session) return false;
+    el.textContent = safeText.slice(0, i);
+    toBottom();
+    await sleep(speed);
   }
 
   return sid === session;
@@ -224,14 +236,20 @@ const Store = {
 
 const MAX_LOG = 200;
 function logMessage(who, text){
-  const hist = Store.get("history", []);
+  const saved = Store.get("history", []);
+  const hist = Array.isArray(saved) ? saved : [];
   hist.push({ who, text, ts: Date.now() });
   Store.set("history", hist.slice(-MAX_LOG));
 }
-function showHistory(n){
-  const hist = Store.get("history", []).slice(-n);
+function showHistory(n = 10){
+  const count = Number.isFinite(n) ? Math.max(1, Math.min(MAX_LOG, Math.floor(n))) : 10;
+  const saved = Store.get("history", []);
+  const hist = (Array.isArray(saved) ? saved : []).slice(-count);
   if (!hist.length){ addLine("sys", CONFIG.historyEmpty); return; }
-  hist.forEach(h => addLine("sys", `[${new Date(h.ts).toLocaleTimeString("vi-VN")}] ${h.who}: ${h.text}`));
+  hist.forEach(h => {
+    const time = new Date(h.ts).toLocaleTimeString("vi-VN");
+    addLine("sys", `[${time}] ${h.who}: ${h.text}`);
+  });
 }
 
 // [N1] Luồng hỏi tên — MỚI. Chạy một lần khi chưa có tên lưu trong Store.
@@ -269,13 +287,60 @@ const COMMANDS = {
              run: () => startGame() },
   exit:    { desc: "Goodbye.",
              run: () => { addLine("sys", CONFIG.chatExitMsg); inputRow.classList.remove("ready"); userInput.disabled = true; } },
+  add:     { desc: "Add fallback replies (/add reply1, vi1; reply2, vi2).",
+             run: args => {
+               // args là mảng các từ sau chữ /add, nối lại thành chuỗi đầy đủ
+               const content = args.join(" ");
+               const resultMsg = handleAddCustomPhrases(content);
+               addLine("sys", resultMsg);
+             } },
 };
-function runCommand(raw){
-  const [cmd, ...args] = raw.slice(1).trim().split(/\s+/);
-  const entry = COMMANDS[(cmd || "").toLowerCase()];
-  if (!entry){ addLine("sys", CONFIG.unknownCommand(cmd || "")); return; }
-  entry.run(args);
+async function runCommand(raw){
+  const tokens = raw.slice(1).trim().split(/\s+/);
+  const cmd = (tokens.shift() || "").toLowerCase();
+  const entry = COMMANDS[cmd];
+  if (!entry){ addLine("sys", CONFIG.unknownCommand(cmd)); return; }
+  await entry.run(tokens);
 }
+
+// BANK chỉ chứa các nhóm từ khóa cố định trong phraseBank.
+// Câu người dùng thêm bằng /add được lưu riêng và dùng làm câu trả lời dự phòng.
+function refreshBank(){
+  BANK = phraseBank.map(category => ({
+    ...category,
+    keys: category.keywords.map(asWords)
+  }));
+}
+
+// Chạy một lần khi trang khởi động để chuẩn hóa từ khóa.
+refreshBank();
+
+function handleAddCustomPhrases(inputStr){
+  const lines = inputStr.split(";").map(line => line.trim()).filter(Boolean);
+  if (!lines.length) return "Cú pháp không hợp lệ hoặc rỗng.";
+
+  const newEntries = [];
+  for (const line of lines){
+    const commaIndex = line.indexOf(",");
+    const reply = (commaIndex === -1 ? line : line.slice(0, commaIndex)).trim();
+    const vi = commaIndex === -1 ? "..." : line.slice(commaIndex + 1).trim();
+    if (reply) newEntries.push({ reply, vi: vi || "..." });
+  }
+
+  if (!newEntries.length) return "Không tìm thấy câu hợp lệ để thêm.";
+
+  const saved = Store.get("custom_phrases", []);
+  const customList = Array.isArray(saved) ? saved : [];
+  const updatedList = [...customList, ...newEntries].slice(-100);
+
+  if (!Store.set("custom_phrases", updatedList)){
+    return "Không lưu được: trình duyệt chặn localStorage hoặc đã hết dung lượng.";
+  }
+
+  return `Đã thêm ${newEntries.length} câu vào nhóm trả lời dự phòng.`;
+}
+
+
 
 // [GAME1] ĐỊNH DẠNG CỐT TRUYỆN — đây là phần bạn sẽ thay bằng kịch bản của
 // mình. Mỗi "node" là một đoạn thoại:
@@ -308,59 +373,99 @@ const STORY = {
 // [GAME2] Bộ máy chạy cốt truyện — KHÔNG CẦN SỬA phần này khi viết kịch bản
 // mới, chỉ cần sửa STORY ở trên. gameState giữ node hiện tại.
 let gameState = null;
-function todayKey(){ return new Date().toISOString().slice(0, 10); }
+function todayKey(){
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 function isGameLockedToday(){ return Store.get("lastPlayed") === todayKey(); }
 
 async function startGame(){
-  if (isGameLockedToday()){ addLine("sys", CONFIG.gameLocked); return; }
+  if (isGameLockedToday()){
+    addLine("sys", CONFIG.gameLocked);
+    return;
+  }
+  if (!STORY[STORY_START_NODE]){
+    addLine("sys", "Game configuration error: start node not found.");
+    return;
+  }
   gameState = { node: STORY_START_NODE };
   setMode("game");
   await playNode();
 }
 
 async function playNode(){
+  if (!gameState) return;
   const sid = session;
   const node = STORY[gameState.node];
+  if (!node || !Array.isArray(node.lines)){
+    addLine("sys", "Game configuration error: node is missing or invalid.");
+    gameState = null;
+    setMode("chat");
+    return;
+  }
+
   const name = Store.get("name", CONFIG.defaultName);
   for (const raw of node.lines){
-    const text = raw.replaceAll("{name}", name);
+    const text = String(raw).replaceAll("{name}", name);
     if (!(await typeInto(addLine("sys"), text, CONFIG.speedReply, sid))) return;
     await sleep(reducedMotion() ? 0 : CONFIG.bootPause);
-    if (sid !== session) return;
+    if (sid !== session || !gameState) return;
   }
+
   if (node.end){ await endGame(); return; }
-  node.choices.forEach((c, i) => addLine("sys", `  ${i + 1}. ${c.label}`));
+  if (!Array.isArray(node.choices) || node.choices.length === 0){
+    addLine("sys", "Game configuration error: this node has no choices and is not an ending.");
+    gameState = null;
+    setMode("chat");
+    return;
+  }
+  node.choices.forEach((choice, index) => addLine("sys", `  ${index + 1}. ${choice.label}`));
   addLine("sys", CONFIG.gameHint);
 }
 
-// [GAME3] Nhận input khi đang ở mode "game" — gọi từ handleSubmit (J6 mới).
-function handleGameInput(text){
-  if (text.trim().toLowerCase() === "/exit"){ quitGame(); return; }
+// Nhận lựa chọn của người chơi trong mode game.
+async function handleGameInput(text){
+  if (text.trim().toLowerCase() === "/exit"){
+    quitGame();
+    return;
+  }
+  if (!gameState) return;
+
   const node = STORY[gameState.node];
   const idx = Number(text) - 1;
-  const choice = node.choices?.[idx];
-  if (!choice){ addLine("sys", CONFIG.gameInvalidChoice); return; }
+  const choice = Number.isInteger(idx) ? node?.choices?.[idx] : null;
+  if (!choice || !STORY[choice.next]){
+    addLine("sys", CONFIG.gameInvalidChoice);
+    return;
+  }
+
   gameState.node = choice.next;
-  playNode();
+  await playNode();
 }
-function quitGame(){   // thoát giữa chừng — KHÔNG tính là đã chơi hôm nay, không khoá /game
-  addLine("sys", CONFIG.gameQuit);
+
+function quitGame(){
+  const name = Store.get("name", CONFIG.defaultName);
+  addLine("sys", CONFIG.gameQuit(name));
   gameState = null;
   setMode("chat");
 }
 
-// [GAME4] Kết thúc thật (đi tới một node end:true) — khoá /game tới ngày mai
-// và "kick" người chơi: khoá luôn ô nhập, không tự mở lại. Có thử window.close()
-// nhưng đa số trình duyệt CHẶN đóng tab không do script mở — xem README.
+// Kết thúc game: ghi ngày đã chơi và khóa input cho đến khi người dùng RESET.
 async function endGame(){
+  const sid = session;
   const name = Store.get("name", CONFIG.defaultName);
   Store.set("lastPlayed", todayKey());
   gameState = null;
   addLine("sys");
-  await typeInto(addLine("sys"), CONFIG.gameFarewell(name), CONFIG.speedReply, session);
+
+  const completed = await typeInto(addLine("sys"), CONFIG.gameFarewell(name), CONFIG.speedReply, sid);
+  if (!completed || sid !== session) return;
+
   inputRow.classList.remove("ready");
   userInput.disabled = true;
-  setTimeout(() => { try { window.close(); } catch {} }, 1500);
 }
 
 // [J5] runBoot — ĐƯỢC VIẾT LẠI: boot xong thì hỏi tên (nếu chưa có tên lưu),
@@ -397,9 +502,14 @@ async function handleSubmit(ev){
   userInput.disabled = true;
 
   if (mode === "game"){
-    addLine("you").append(span("tag", CONFIG.youTag), text); toBottom();
-    handleGameInput(text);
-    userInput.disabled = false; userInput.focus();
+    addLine("you").append(span("tag", CONFIG.youTag), text);
+    toBottom();
+    await handleGameInput(text);
+    // Nếu game đã kết thúc thì giữ input khóa; /exit thì quay về chat và mở lại.
+    if (sid === session && (mode === "chat" || gameState !== null)){
+      userInput.disabled = false;
+      userInput.focus();
+    }
     return;
   }
 
@@ -407,20 +517,40 @@ async function handleSubmit(ev){
   toBottom();
 
   if (text.startsWith("/")){
-    runCommand(text);
-    userInput.disabled = false; userInput.focus();
+    await runCommand(text);
+    // /exit chủ động ẩn và khóa input, không bật lại ngay sau khi chạy lệnh.
+    if (sid === session && inputRow.classList.contains("ready") && mode !== "name" && (mode !== "game" || gameState !== null)){
+      userInput.disabled = false;
+      userInput.focus();
+    }
     return;
   }
 
-  logMessage(Store.get("name", CONFIG.defaultName), text);   // [DB2] chỉ log chat thật, không log lệnh
+  logMessage(Store.get("name", CONFIG.defaultName), text);
   await sleep(CONFIG.thinkDelay);
   if (sid !== session) return;
-  const reply = pickReply(text), line = addLine("DYGL"), main = span("reply-main", "");
+
+  const reply = pickReply(text);
+  const line = addLine("DYGL");
+  const main = span("reply-main", "");
   line.append(span("tag", CONFIG.DYGLTag), main);
+
   if (!(await typeInto(main, reply.reply, CONFIG.speedReply, sid))) return;
+
+  // Chỉ tạo link từ URL được khai báo trong dữ liệu, không đưa HTML vào innerHTML.
+  if (reply.linkUrl){
+    const link = document.createElement("a");
+    link.href = reply.linkUrl;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = "[rickroll]";
+    main.append(" ", link);
+  }
+
   addLine("reply-note", CONFIG.noteArrow + reply.vi);
   logMessage("DYGL", reply.reply);
-  userInput.disabled = false; userInput.focus();
+  userInput.disabled = false;
+  userInput.focus();
 }
 
 // [J7] Gắn sự kiện, đồng hồ, khởi động — GIỮ NGUYÊN, chỉ thêm gameState=null

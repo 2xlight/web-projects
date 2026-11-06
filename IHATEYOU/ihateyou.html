@@ -3,84 +3,284 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>IHATEU</title>
+<title>IHATEYOU</title>
 <style>
-/* Font + Reset + Background + Biến CSS đầy đủ */
 :root{
-  --paper: #fff;
-  --ink: #000;
-  --grey: #555;
-  --accent: #0066cc;
-  --card: #f9f9f9;
-  --text: #222;
+  --paper: #121212;
+  --card: #1e1e1e;
+  --text: #e0e0e0;
   --muted: #888;
-  --danger: #cc0000;
-  --font: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+  --accent: #ff4500;
+  --border: #333;
+  --bg-hover: #2a2a2a;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 *{box-sizing:border-box}
-html{background:var(--paper)}
-body{margin:0;padding:20px;min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;align-items:center;background:var(--paper);color:var(--text);font-family:var(--font)}
-header{width:100%;max-width:700px;padding:14px 24px;border-bottom:2px solid var(--accent);display:flex;justify-content:space-between;align-items:center}
-h1,h2{font-family:Georgia,"Times New Roman",serif}
-h1{margin:0;font-size:1.15em;color:var(--accent)}
-main{width:100%;max-width:700px;margin:0 auto;padding:20px}
+body{margin:0;padding:20px;min-height:100vh;display:flex;flex-direction:column;align-items:center;background:var(--paper);color:var(--text);font-family:var(--font)}
 
-/* Ô nạp payload ở giữa + console */
-.center{padding:44px 0 30px;text-align:center}
-.center h2{margin:0 0 16px;font-size:1.9em;line-height:1.15}
-#exec-form{display:flex;gap:8px}
-input,textarea,button{font:inherit;color:var(--text);background:var(--card);border:1px solid var(--muted);border-radius:3px;padding:9px 12px}
-#exec-input{flex:1;border:2px solid var(--accent);font-family:ui-monospace,Consolas,monospace}
-button{cursor:pointer}
-button:hover,button.on{border-color:var(--accent);color:var(--accent)}
-button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-#console{margin:12px 0 0;padding:10px 12px;text-align:left;white-space:pre-wrap;overflow-wrap:anywhere;background:var(--card);border-left:4px solid var(--muted);font:.9em ui-monospace,Consolas,monospace;min-height:2.6em}
-#console.ok{border-color:var(--accent)}
-#console.err{border-color:var(--danger);color:var(--danger)}
+/* Đã bỏ max-width cố định, để width 100% tràn màn hình */
+header{width:100%;max-width:1400px;padding:16px 24px;background:var(--card);border-radius:8px;border:1px solid var(--border);margin-bottom:20px;display:flex;justify-content:space-between;align-items:center}
+h1{margin:0;font-size:1.5rem;color:var(--accent)}
+
+/* Container chính mở rộng tối đa 1400px hoặc 100% */
+.container { width: 100%; max-width: 1400px; display: grid; grid-template-columns: 1fr 350px; gap: 20px; }
+@media(max-width: 900px){ .container { grid-template-columns: 1fr; } }
+
+/* Sidebar bên phải */
+.sidebar { display: flex; flex-direction: column; gap: 20px; }
+.widget { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+.widget h3 { margin: 0 0 12px 0; font-size: 1.1rem; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+
+.board-list { display: flex; flex-direction: column; gap: 8px; }
+.board-btn { background: transparent; border: 1px solid var(--border); color: var(--text); padding: 10px 14px; text-align: left; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 1rem; }
+.board-btn:hover, .board-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* Leaderboard & Khung đại diện */
+.leaderboard-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #2a2a2a; font-size: 0.95rem; }
+.user-rank-info { display: flex; align-items: center; gap: 10px; }
+.avatar-frame-top1 { position: relative; width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(45deg, #ffd700, #ff4500); padding: 2px; display: flex; align-items: center; justify-content: center; }
+.avatar-inner { width: 100%; height: 100%; border-radius: 50%; background: #444; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; font-weight: bold; color: #fff; }
+
+/* Main content phóng to */
+.main-content { width: 100%; }
+.post-box { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+.post-box h3 { margin-top: 0; font-size: 1.2rem; }
+.post-box textarea { width: 100%; background: #121212; border: 1px solid var(--border); color: var(--text); padding: 14px; border-radius: 6px; resize: vertical; min-height: 120px; font-size: 1rem; }
+.post-box input { width: 100%; background: #121212; border: 1px solid var(--border); color: var(--text); padding: 12px; border-radius: 6px; margin-bottom: 12px; font-size: 1rem; }
+.post-box select { background: #121212; border: 1px solid var(--border); color: var(--text); padding: 12px; border-radius: 6px; margin-bottom: 12px; width: 100%; font-size: 1rem; }
+.btn { background: var(--accent); color: #fff; border: none; padding: 10px 20px; font-weight: bold; border-radius: 6px; cursor: pointer; font-size: 1rem; }
+.btn:hover { opacity: 0.9; }
+
+/* Post Card tràn rộng */
+.post-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; margin-bottom: 16px; display: flex; gap: 16px; }
+.vote-section { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; min-width: 40px; gap: 6px; }
+.vote-btn { background: transparent; border: none; color: var(--muted); cursor: pointer; font-size: 1.2rem; font-weight: bold; }
+.vote-btn:hover { color: var(--accent); }
+.score-display { font-weight: bold; font-size: 1.1rem; color: var(--text); }
+
+.post-body-content { flex: 1; }
+.post-meta { font-size: 0.9rem; color: var(--muted); margin-bottom: 8px; }
+.post-text { font-size: 1.05rem; line-height: 1.5; margin: 0 0 14px 0; word-break: break-word; }
+.post-footer-actions { display: flex; gap: 20px; font-size: 0.95rem; color: var(--muted); font-weight: 600; cursor: pointer; }
+.post-footer-actions span:hover { color: var(--accent); }
+
+.comments-section { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 12px; }
+.comment-item { font-size: 0.95rem; background: #121212; padding: 8px 12px; border-radius: 6px; margin-bottom: 8px; }
+.comment-form { display: flex; gap: 8px; margin-top: 10px; }
+.comment-form input { flex: 1; background: #121212; border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 4px; font-size: 0.95rem; }
 </style>
 </head>
 <body>
 
   <header>
-    <h1 id="site-title">IHATEU</h1>
+    <h1>IHATEYOU // DIỄN ĐÀN CHẤM ĐIỂM</h1>
   </header>
 
-  <main>
-    <section class="center">
-      <h2 id="hero">Chửi gì chửi đi.</h2>
-      <form id="exec-form">
-        <input id="exec-input" type="text" placeholder="Nhập câu chửi..." required>
-        <button type="submit">do it !</button>
-      </form>
-      <div id="console">everything's alright~</div>
-    </section>
-  </main> <!-- ĐÃ THÊM: Đóng thẻ main -->
+  <div class="container">
+    <!-- Cột trái: Đăng bài & Dòng thời gian -->
+    <div class="main-content">
+      <div class="post-box">
+        <h3>Xả nội dung / Nhập status</h3>
+        <form id="post-form">
+          <select id="board-select"></select>
+          <input type="text" id="author-input" placeholder="Tên / Biệt danh của cậu..." required autocomplete="off">
+          <textarea id="content-input" placeholder="Chửi bới, chia sẻ hoặc flex gì đó tùy thích để kiếm điểm..." required></textarea>
+          <button type="submit" class="btn">Đăng lên Board</button>
+        </form>
+      </div>
+
+      <div id="posts-container"></div>
+    </div>
+
+    <!-- Cột phải: Sidebar (Boards & BXH) -->
+    <div class="sidebar">
+      <div class="widget">
+        <h3>Danh mục (Boards)</h3>
+        <div class="board-list" id="board-nav">
+          <button class="board-btn active" onclick="switchBoard('all')">🔥 Tất cả bài viết</button>
+        </div>
+      </div>
+
+      <div class="widget">
+        <h3>🏆 Bảng Xếp Hạng (Top Chửi)</h3>
+        <div id="leaderboard-container">
+          <!-- Render bxh -->
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script>
-      // ĐÃ SỬA: Lắng nghe sự kiện submit form và gửi dữ liệu tới API /api/rate
-      document.getElementById("exec-form").addEventListener("submit", async (e) => {
-          e.preventDefault();
-          const text = document.getElementById("exec-input").value;
-          const consoleDiv = document.getElementById("console");
+      let currentBoard = "all";
+      let boardsData = {};
+
+      async function init() {
+          await fetchBoards();
+          await fetchPosts();
+          await fetchLeaderboard();
+      }
+
+      async function fetchBoards() {
+          const res = await fetch("/api/boards");
+          boardsData = await res.json();
           
-          try {
-              const response = await fetch("/api/rate", {
-                  method: "POST",
-                  headers: {
-                      "Content-Type": "application/json"
-                  },
-                  body: JSON.stringify({ name: text })
-              });
-              
-              const data = await response.json();
-              consoleDiv.className = "ok";
-              consoleDiv.innerText = `${data.name} (${data.score} điểm): ${data.message}`;
-          } catch (error) {
-              consoleDiv.className = "err";
-              consoleDiv.innerText = "Lỗi kết nối server!";
-              console.error("Lỗi:", error);
+          const nav = document.getElementById("board-nav");
+          const select = document.getElementById("board-select");
+          
+          nav.innerHTML = `<button class="board-btn ${currentBoard === 'all' ? 'active' : ''}" onclick="switchBoard('all')">🔥 Tất cả</button>`;
+          select.innerHTML = "";
+
+          for (const [key, val] of Object.entries(boardsData)) {
+              nav.innerHTML += `<button class="board-btn ${currentBoard === key ? 'active' : ''}" onclick="switchBoard('${key}')">/${key}/ - ${val.name}</button>`;
+              select.innerHTML += `<option value="${key}">/${key}/ - ${val.name}</option>`;
           }
+      }
+
+      async function fetchPosts() {
+          const res = await fetch("/api/posts");
+          const posts = await res.json();
+          
+          const filtered = currentBoard === "all" ? posts : posts.filter(p => p.board === currentBoard);
+          renderPosts(filtered);
+      }
+
+      async function fetchLeaderboard() {
+          const res = await fetch("/api/leaderboard");
+          const leaderboard = await res.json();
+          
+          const container = document.getElementById("leaderboard-container");
+          container.innerHTML = "";
+
+          leaderboard.forEach((user, index) => {
+              const isTop1 = index === 0;
+              container.innerHTML += `
+                  <div class="leaderboard-item">
+                      <div class="user-rank-info">
+                          <span>#${user.rank}</span>
+                          <div class="${isTop1 ? 'avatar-frame-top1' : ''}" style="${!isTop1 ? 'width:32px;height:32px;border-radius:50%;background:#444;display:flex;align-items:center;justify-content:center;font-size:0.8rem;' : ''}">
+                              <div class="avatar-inner">${user.author.charAt(0).toUpperCase()}</div>
+                          </div>
+                          <strong>${escapeHtml(user.author)}</strong>
+                      </div>
+                      <span style="color: var(--accent); font-weight: bold;">${user.score} đ</span>
+                  </div>
+              `;
+          });
+      }
+
+      function switchBoard(boardKey) {
+          currentBoard = boardKey;
+          fetchBoards();
+          fetchPosts();
+      }
+
+      function renderPosts(posts) {
+          const container = document.getElementById("posts-container");
+          container.innerHTML = "";
+
+          if (posts.length === 0) {
+              container.innerHTML = `<p style="text-align:center; color:var(--muted);">Chưa có bài viết nào ở danh mục này.</p>`;
+              return;
+          }
+
+          posts.forEach(post => {
+              let commentsHtml = "";
+              post.comments.forEach(c => {
+                  commentsHtml += `
+                      <div class="comment-item">
+                          <strong>${escapeHtml(c.author)}:</strong> ${escapeHtml(c.content)}
+                      </div>
+                  `;
+              });
+
+              container.innerHTML += `
+                  <div class="post-card">
+                      <div class="vote-section">
+                          <button class="vote-btn" onclick="vote(${post.id}, 1)">▲</button>
+                          <span class="score-display">${post.score}</span>
+                          <button class="vote-btn" onclick="vote(${post.id}, -1)">▼</button>
+                      </div>
+                      <div class="post-body-content">
+                          <div class="post-meta">/${post.board}/ • Đăng bởi <strong>${escapeHtml(post.author)}</strong></div>
+                          <p class="post-text">${escapeHtml(post.content)}</p>
+                          <div class="post-footer-actions">
+                              <span onclick="toggleComments(${post.id})">💬 ${post.comments.length} Bình luận</span>
+                              <span onclick="reportPost(${post.id})" style="color: #ff4444; font-weight: normal;">🚩 Báo cáo</span>
+                          </div>
+                          <div class="comments-section" id="comments-box-${post.id}" style="display:none;">
+                              <div id="comments-list-${post.id}">
+                                  ${commentsHtml}
+                              </div>
+                              <form class="comment-form" onsubmit="submitComment(event, ${post.id})">
+                                  <input type="text" id="c-author-${post.id}" placeholder="Tên..." style="max-width: 120px;" required>
+                                  <input type="text" id="c-content-${post.id}" placeholder="Viết bình luận..." required autocomplete="off">
+                                  <button type="submit" class="btn" style="padding: 6px 14px; font-size: 0.9rem;">Gửi</button>
+                              </form>
+                          </div>
+                      </div>
+                  </div>
+              `;
+          });
+      }
+
+      async function vote(postId, value) {
+          await fetch(`/api/posts/${postId}/vote`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ value })
+          });
+          fetchPosts();
+          fetchLeaderboard();
+      }
+      async function reportPost(postId) {
+          if (!confirm("Cậu có chắc muốn báo cáo bài viết này vì kém văn minh/rác không?")) return;
+          
+          const res = await fetch(`/api/posts/${postId}/report`, { method: "POST" });
+          if (res.ok) {
+              alert("Đã ghi nhận báo cáo! Cộng đồng cảm ơn sự đóng góp của cậu.");
+              fetchPosts();
+          }
+      }
+      function toggleComments(postId) {
+          const box = document.getElementById(`comments-box-${postId}`);
+          box.style.display = box.style.display === "none" ? "block" : "none";
+      }
+
+      async function submitComment(e, postId) {
+          e.preventDefault();
+          const author = document.getElementById(`c-author-${postId}`).value;
+          const content = document.getElementById(`c-content-${postId}`).value;
+
+          await fetch(`/api/posts/${postId}/comments`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ author, content })
+          });
+          fetchPosts();
+      }
+
+      document.getElementById("post-form").addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const board = document.getElementById("board-select").value;
+          const author = document.getElementById("author-input").value;
+          const content = document.getElementById("content-input").value;
+
+          await fetch("/api/posts", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ board, author, content })
+          });
+
+          document.getElementById("content-input").value = "";
+          fetchPosts();
+          fetchLeaderboard();
       });
+
+      function escapeHtml(str) {
+          return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      }
+
+      init();
   </script>
 </body>
 </html>
