@@ -10,7 +10,7 @@
   --card: #1e1e1e;
   --text: #e0e0e0;
   --muted: #888;
-  --accent: #ff4500;
+  --accent: #ff5bde;
   --border: #333;
   --bg-hover: #2a2a2a;
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -73,18 +73,18 @@ h1{margin:0;font-size:1.5rem;color:var(--accent)}
 <body>
 
   <header>
-    <h1>IHATEYOU // DIỄN ĐÀN CHẤM ĐIỂM</h1>
+    <h1>IHATEYOU</h1>
   </header>
 
   <div class="container">
     <!-- Cột trái: Đăng bài & Dòng thời gian -->
     <div class="main-content">
       <div class="post-box">
-        <h3>Xả nội dung / Nhập status</h3>
+        <h3>What's new?</h3>
         <form id="post-form">
           <select id="board-select"></select>
-          <input type="text" id="author-input" placeholder="Tên / Biệt danh của cậu..." required autocomplete="off">
-          <textarea id="content-input" placeholder="Chửi bới, chia sẻ hoặc flex gì đó tùy thích để kiếm điểm..." required></textarea>
+          <input type="text" id="author-input" placeholder="Username" required autocomplete="off">
+          <textarea id="content-input" placeholder="Comeout đi..." required></textarea>
           <button type="submit" class="btn">Đăng lên Board</button>
         </form>
       </div>
@@ -102,7 +102,7 @@ h1{margin:0;font-size:1.5rem;color:var(--accent)}
       </div>
 
       <div class="widget">
-        <h3>🏆 Bảng Xếp Hạng (Top Chửi)</h3>
+        <h3>🏆 Bảng Xếp Hạng (/CF Board)</h3>
         <div id="leaderboard-container">
           <!-- Render bxh -->
         </div>
@@ -233,11 +233,11 @@ h1{margin:0;font-size:1.5rem;color:var(--accent)}
           fetchLeaderboard();
       }
       async function reportPost(postId) {
-          if (!confirm("Cậu có chắc muốn báo cáo bài viết này vì kém văn minh/rác không?")) return;
+          if (!confirm("Xem kĩ lại trước khi báo cáo nha!")) return;
           
           const res = await fetch(`/api/posts/${postId}/report`, { method: "POST" });
           if (res.ok) {
-              alert("Đã ghi nhận báo cáo! Cộng đồng cảm ơn sự đóng góp của cậu.");
+              alert("Đã ghi nhận báo cáo nhen!");
               fetchPosts();
           }
       }

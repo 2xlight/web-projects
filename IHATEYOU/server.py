@@ -4,19 +4,21 @@ from pathlib import Path
 
 # Cấu trúc dữ liệu: Phân loại theo Board (nhóm)
 boards = {
-    "b": {"name": "Random / Tám chuyện", "desc": "Nơi mọi thứ diễn ra không cần logic."},
-    "tech": {"name": "Technology / Code", "desc": "Bàn chuyện công nghệ, bug và server."},
-    "confess": {"name": "Confession / Xõa", "desc": "Góc xả stress, chửi thuê tích điểm."}
+    "r": {"name": "Random - nói gì cũng được.", "desc": "Bạn nói tui nghe coi-"},
+    "it": {"name": "Technology - RAM, vibe-coding,...", "desc": "About công nghệ nhưng không cần thượng đẳng."},
+    "CF": {"name": "Confession - Chí Fèo", "desc": "Chắc nó không chừa mình ra."},
+    "Stu": {"name": "Study - Học, học nữa, học mãi", "desc": "Tìm nhóm học, bàn về học, khoe cái học."},
+    "W": {"name": "Work - Thất thất nghiệp", "desc": "Thất thất nghiệp"}
 }
 
 # Kho lưu trữ bài viết mẫu
 posts = [
     {
-        "id": 1,
+        "id": 0,
         "board": "b",
-        "author": "Admin",
-        "score": 85,
-        "content": "Chào mừng đến với sân chơi chấm điểm độ chất!",
+        "author": "Áp-min",
+        "score": 0,
+        "content": "Hello mấy cưng.",
         "comments": [
             {"author": "Hệ thống", "content": "Mở màn thế là ổn đấy."}
         ]
