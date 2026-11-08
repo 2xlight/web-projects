@@ -1,5 +1,6 @@
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
+import random
 from pathlib import Path
 
 # Cấu trúc dữ liệu: Phân loại theo Board (nhóm)
@@ -14,7 +15,7 @@ boards = {
 # Kho lưu trữ bài viết mẫu
 posts = [
     {
-        "id": 0,
+        "id": 1,
         "board": "b",
         "author": "Áp-min",
         "score": 0,
@@ -61,7 +62,13 @@ class Handler(BaseHTTPRequestHandler):
             leaderboard = [{"rank": i+1, "author": u[0], "score": u[1]} for i, u in enumerate(sorted_users)]
             self.send_json(leaderboard)
             return
-
+        # [TÍNH NĂNG MỚI] Bẫy Admin - Dụ hack web bằng Rickroll
+        if self.path == "/api/admin":
+            self.send_json({
+                "message": "Ghê vậy sao? Định bypass hệ thống à cưng?",
+                "secret_gift": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+            })
+            return
         if self.path == "/" or self.path == "/index.html":
             self.send_file("ihateyou.html")
             return
@@ -71,7 +78,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         global posts, post_id_counter
 
-        # 1. Đăng bài viết mới vào board cụ thể
+        # 1. Đăng bài viết mới + Phát hiện payload/Burpsuite
         if self.path == "/api/posts":
             length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(length)
@@ -85,9 +92,15 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"error": "Nội dung trống"}, 400)
                 return
 
-            # Giả lập chấm điểm tự động độ "chất/tục" cho bài viết (hoặc tuỳ chỉnh theo ý cậu)
-            import random
-            score = random.randint(10, 100)
+            # [TÍNH NĂNG MỚI] Check xem có đang chèn payload (XSS/SQLi) hoặc táy máy Burpsuite không
+            danger_keywords = ["<script>", "or 1=1", "select", "union", "drop", "alert", "eval(", "burp"]
+            is_hacking = any(kw in content.lower() for kw in danger_keywords)
+            
+            if is_hacking:
+                score = 9999 # Thưởng điểm cực mạnh cho hacker múa rìu qua mắt thợ
+                content = f"[⚠️ CẢNH BÁO HACKER PÉN] {content} (Đã được ghi danh vào bảng vàng phá hoại!)"
+            else:
+                score = random.randint(10, 100)
 
             new_post = {
                 "id": post_id_counter,
@@ -104,14 +117,36 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(new_post, 201)
             return
 
-        # 2. Vote điểm bài viết (+1 hoặc -1 điểm)
+        # 2. [ĐÃ SỬA] API Vote điểm bài viết (+1 hoặc -1)
+        if self.path.startswith("/api/posts/") and self.path.endswith("/vote"):
+            try:
+                parts = self.path.split("/")
+                post_id = int(parts[3])
+                length = int(self.headers.get("Content-Length", 0))
+                body = self.rfile.read(length)
+                data = json.loads(body)
+                val = int(data.get("value", 0))
+
+                for post in posts:
+                    if post["id"] == post_id:
+                        if val > 0:
+                            post["score"] += 1
+                        elif val < 0:
+                            post["score"] -= 1
+                        self.send_json({"success": True, "score": post["score"]})
+                        return
+                self.send_json({"error": "Post not found"}, 404)
+            except Exception:
+                self.send_json({"error": "Invalid request"}, 400)
+            return
+
+        # 3. Report bài viết
         if self.path.startswith("/api/posts/") and self.path.endswith("/report"):
             try:
                 post_id = int(self.path.split("/")[3])
                 for post in posts:
                     if post["id"] == post_id:
                         post["reports"] += 1
-                        # Nếu nhận từ 5 báo cáo trở lên tự động trừ điểm hoặc xóa/ẩn bài
                         if post["reports"] >= 5:
                             post["score"] = -999 # Đẩy xuống đáy xã hội
                         self.send_json({"success": True, "reports": post["reports"]})
@@ -121,7 +156,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"error": "Invalid request"}, 400)
             return
 
-        # 3. Gửi bình luận
+        # 4. Gửi bình luận
         if self.path.startswith("/api/posts/") and self.path.endswith("/comments"):
             try:
                 post_id = int(self.path.split("/")[3])
