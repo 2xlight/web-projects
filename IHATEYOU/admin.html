@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IHATEYOU - Quản trị</title>
+<style>
+body{margin:0;padding:20px;background:#121212;color:#e0e0e0;font-family:-apple-system,"Segoe UI",Roboto,sans-serif;max-width:1000px;margin:auto}
+h1,h2{color:#ff5100}section{background:#1e1e1e;border:1px solid #333;border-radius:8px;padding:14px;margin-bottom:16px}
+input{background:#121212;border:1px solid #333;color:#e0e0e0;padding:8px;border-radius:6px}
+button{background:#ff5100;color:#fff;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-weight:bold}
+.row{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid #2a2a2a;font-size:.9rem}
+code{color:#22c55e;word-break:break-all}small{color:#888}
+</style>
+</head>
+<body>
+<h1>⚙️ Quản trị IHATEYOU</h1>
+<section id="login">
+  <input id="u" placeholder="admin" value="admin"> <input id="p" type="password" placeholder="Mật khẩu admin">
+  <button onclick="login()">Đăng nhập</button>
+</section>
+<div id="panel" style="display:none">
+  <section><h2>🚫 IP đang bị ban</h2><div id="bans"></div></section>
+  <section><h2>👶 Đang bị khung NOOB</h2><div id="muted"></div></section>
+  <section><h2>🕵️ Nhật ký honeypot / board ẩn</h2><div id="log"></div></section>
+  <section><h2>📝 Bài viết (xóa bài)</h2><div id="posts"></div></section>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmt = t => new Date(t * 1000).toLocaleString("vi-VN");
+
+// Gọi API: GET nếu không có body, POST JSON nếu có. Lỗi thì alert và trả null.
+async function api(url, body) {
+  const r = await fetch(url, body === undefined ? {} : {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) { alert(d.error || "Lỗi"); return null; }
+  return d;
+}
+
+async function login() {
+  if (!await api("/api/login", {username: $("u").value, password: $("p").value})) return;
+  const me = await api("/api/me");
+  if (!me || !me.admin) return alert("Tài khoản này không phải admin.");
+  $("login").style.display = "none"; $("panel").style.display = "block"; load();
+}
+
+async function load() {
+  const [bans, muted, log, posts] = await Promise.all([api("/api/mod/bans"), api("/api/mod/muted"), api("/api/mod/log"), api("/api/posts?size=50")]);
+  $("bans").innerHTML = (bans || []).map(b => `<div class="row"><span><code>${esc(b.ip)}</code> <small>tới ${fmt(b.until)}</small></span><button data-ip="${esc(b.ip)}" class="unban">Gỡ ban</button></div>`).join("") || "<small>Không có</small>";
+  $("muted").innerHTML = (muted || []).map(m => `<div class="row"><span><code>${esc(m.key)}</code> <small>tới ${fmt(m.until)}</small></span><button data-key="${esc(m.key)}" class="unmute">Gỡ NOOB</button></div>`).join("") || "<small>Không có</small>";
+  $("log").innerHTML = (log || []).map(l => `<div class="row"><span><b>${esc(l.author)}</b> <small>${esc(l.ip)} · ${esc(l.kind)} · ${esc(l.field)} · ${fmt(l.ts)} · web chấm ${l.web}</small><br><code>${esc(l.content)}</code></span></div>`).join("") || "<small>Chưa có ai bị bắt</small>";
+  $("posts").innerHTML = (posts ? posts.items : []).map(p => `<div class="row"><span><b>/${esc(p.board)}/ ${esc(p.author)}</b>: ${esc(p.content.slice(0, 100))}</span><button data-id="${p.id}" class="del">Xóa</button></div>`).join("") || "<small>Chưa có bài</small>";
+}
+
+// Gắn sự kiện cho các nút sinh động bằng data-attribute (không nhét dữ liệu vào onclick).
+document.addEventListener("click", async e => {
+  const d = e.target.dataset;
+  if (e.target.classList.contains("unban") && await api("/api/mod/unban", {ip: d.ip})) load();
+  if (e.target.classList.contains("unmute") && await api("/api/mod/unmute", {key: d.key})) load();
+  if (e.target.classList.contains("del") && confirm("Xóa bài này?") && await api(`/api/posts/${d.id}/delete`, {})) load();
+});
+</script>
+</body>
+</html>

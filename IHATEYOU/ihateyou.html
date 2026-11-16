@@ -71,217 +71,192 @@ h1{margin:0;font-size:1.5rem;color:var(--accent)}
 </style>
 </head>
 <body>
+<body>
+<header>
+  <h1>IHATEYOU</h1>
+  <form id="search-form" style="display:flex;gap:6px"><input id="q" placeholder="Tìm bài / người..." autocomplete="off"><button class="btn">Tìm</button></form>
+  <div id="auth" style="display:flex;gap:6px;align-items:center"></div>
+</header>
 
-  <header>
-    <h1>IHATEYOU</h1>
-    <a class="admin-link" onclick="checkAdmin()"> /api/admin</a>
-  </header>
-
-  <div class="container">
-    <!-- Cột trái: Đăng bài & Dòng thời gian -->
-    <div class="main-content">
-      <div class="post-box">
-        <h3>What's new?</h3>
-        <form id="post-form">
-          <select id="board-select"></select>
-          <input type="text" id="author-input" placeholder="Username" required autocomplete="off">
-          <textarea id="content-input" placeholder="Comeout đi..." required></textarea>
-          <button type="submit" class="btn">Đăng lên Board</button>
-        </form>
-      </div>
-
-      <div id="posts-container"></div>
+<div class="container">
+  <div>
+    <div class="post-box">
+      <h3>What's new?</h3>
+      <form id="post-form">
+        <select id="board-select"></select>
+        <textarea id="content" placeholder="Comeout đi..."></textarea>
+        <input type="file" id="img" accept="image/png,image/jpeg,image/gif,image/webp" style="margin-bottom:10px">
+        <div class="hint" id="guest-hint"></div>
+        <button class="btn">Đăng lên Board</button>
+      </form>
     </div>
-
-    <!-- Cột phải: Sidebar (Boards & BXH) -->
-    <div class="sidebar">
-      <div class="widget">
-        <h3>Danh mục (Boards)</h3>
-        <div class="board-list" id="board-nav">
-          <button class="board-btn active" onclick="switchBoard('all')">🔥 Tất cả bài viết</button>
-        </div>
-      </div>
-
-      <div class="widget">
-        <h3>🏆 Bảng Xếp Hạng (/CF Board)</h3>
-        <div id="leaderboard-container">
-          <!-- Render bxh -->
-        </div>
-      </div>
-    </div>
+    <div id="posts"></div>
+    <div id="pager"></div>
   </div>
 
-  <script>
-      let currentBoard = "all";
-      let boardsData = {};
+  <div class="sidebar">
+    <div class="widget prof" id="profile" style="display:none"></div>
+    <div class="widget"><h3>Danh mục (Boards)</h3><div class="board-list" id="nav"></div></div>
+    <div class="widget">
+      <h3>🏆 Bảng Xếp Hạng</h3>
+      <div class="tabs">
+        <button class="tab active" id="t-cf" onclick="setLB('cf')">Chí Fèo</button>
+        <button class="tab" id="t-cf4" onclick="setLB('cf4')">Chí Fèo 4.0</button>
+      </div>
+      <div id="lb"></div>
+    </div>
+  </div>
+</div>
+<footer><a href="/api/admin">/api/admin</a></footer>
 
-      async function init() {
-          await fetchBoards();
-          await fetchPosts();
-          await fetchLeaderboard();
-      }
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const LABEL = {noob:"NOOB", pro:"PRO", hacker:"HACKER", admin:"ADMIN CODE"};
+let PC = {}, isAdmin = false, page = 1, me = null, board = "all", lbType = "cf", query = "", openC = new Set(), replyTo = {};
 
-      async function fetchBoards() {
-          const res = await fetch("/api/boards");
-          boardsData = await res.json();
-          
-          const nav = document.getElementById("board-nav");
-          const select = document.getElementById("board-select");
-          
-          nav.innerHTML = `<button class="board-btn ${currentBoard === 'all' ? 'active' : ''}" onclick="switchBoard('all')">🔥 Tất cả</button>`;
-          select.innerHTML = "";
+const avatar = (n, f) => `<span class="av ${f ? "fr-" + f : ""}" style="--c:${{noob:"#777",pro:"#3b82f6",hacker:"#22c55e",admin:"#ffd700"}[f] || "#444"}">${esc((n[0] || "?").toUpperCase())}</span><b class="lnk" data-u="${esc(n)}">${esc(n)}</b>${f ? `<span class="tag t-${f}">${LABEL[f]}</span>` : ""}`;
 
-          for (const [key, val] of Object.entries(boardsData)) {
-              nav.innerHTML += `<button class="board-btn ${currentBoard === key ? 'active' : ''}" onclick="switchBoard('${key}')">/${key}/ - ${val.name}</button>`;
-              select.innerHTML += `<option value="${key}">/${key}/ - ${val.name}</option>`;
-          }
-      }
+async function api(url, body) {
+  const o = body === undefined ? {} : {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)};
+  const r = await fetch(url, o);
+  let d = {}; try { d = await r.json(); } catch {}
+  if (d.rickroll) { alert(d.error); location.href = d.rickroll; return null; }   // upload sai định dạng → rickroll
+  if (d.troll) { alert(`${d.error}\n${d.troll}\n(Web chấm: ${d.web} đ — đã ghi danh vào BXH Chí Fèo 4.0)`); loadLB(); return null; }
+  if (!r.ok) { if (d.error) alert(d.error); return null; }
+  return d;
+}
 
-      async function fetchPosts() {
-          const res = await fetch("/api/posts");
-          const posts = await res.json();
-          
-          const filtered = currentBoard === "all" ? posts : posts.filter(p => p.board === currentBoard);
-          renderPosts(filtered);
-      }
+async function loadMe() {
+  const d = await api("/api/me"); me = d && d.user; isAdmin = !!(d && d.admin);
+  $("auth").innerHTML = me
+    ? `${avatar(me, d.frame)} ${isAdmin ? '<a href="/admin.html" style="color:var(--accent)">⚙️ Admin</a>' : ""} <button class="btn" style="background:#444" onclick="chpw()">Đổi MK</button> <button class="btn" onclick="logout()">Thoát</button>`
+    : `<input id="lu" placeholder="Username" style="width:120px" autocomplete="off"><input id="lp" type="password" placeholder="Mật khẩu" style="width:120px">
+       <button class="btn" onclick="auth('login')">Đăng nhập</button><button class="btn" style="background:#444" onclick="auth('register')">Đăng ký</button>`;
+  $("guest-hint").textContent = me ? "" : "Khách chỉ được đăng 1 bài / IP, không comment/vote. Đăng nhập để đăng thoải mái.";
+}
+async function auth(kind) {
+  if (await api("/api/" + kind, {username: $("lu").value, password: $("lp").value})) refresh();
+}
+async function logout() { await api("/api/logout", {}); refresh(); }
 
-      async function fetchLeaderboard() {
-          const res = await fetch("/api/leaderboard");
-          const leaderboard = await res.json();
-          
-          const container = document.getElementById("leaderboard-container");
-          container.innerHTML = "";
+async function loadBoards() {
+  const b = await api("/api/boards"); if (!b) return;
+  $("nav").innerHTML = `<button class="board-btn ${board === "all" ? "active" : ""}" onclick="sw('all')">🔥 Tất cả</button>` +
+    Object.entries(b).map(([k, v]) => `<button class="board-btn ${board === k ? "active" : ""}" onclick="sw('${esc(k)}')">/${esc(k)}/ - ${esc(v.name)}</button>`).join("");
+  if (!$("board-select").options.length)
+    $("board-select").innerHTML = Object.entries(b).map(([k, v]) => `<option value="${esc(k)}">/${esc(k)}/ - ${esc(v.name)}</option>`).join("");
+}
+function sw(k) { board = k; query = ""; page = 1; $("q").value = ""; loadBoards(); loadPosts(); }
 
-          leaderboard.forEach((user, index) => {
-              const isTop1 = index === 0;
-              container.innerHTML += `
-                  <div class="leaderboard-item">
-                      <div class="user-rank-info">
-                          <span>#${user.rank}</span>
-                          <div class="${isTop1 ? 'avatar-frame-top1' : ''}" style="${!isTop1 ? 'width:32px;height:32px;border-radius:50%;background:#444;display:flex;align-items:center;justify-content:center;font-size:0.8rem;' : ''}">
-                              <div class="avatar-inner">${user.author.charAt(0).toUpperCase()}</div>
-                          </div>
-                          <strong>${escapeHtml(user.author)}</strong>
-                      </div>
-                      <span style="color: var(--accent); font-weight: bold;">${user.score} đ</span>
-                  </div>
-              `;
-          });
-      }
+async function loadPosts() {
+  const u = query ? "/api/search?q=" + encodeURIComponent(query) : "/api/posts?board=" + encodeURIComponent(board);
+  const d = await api(u + "&page=" + page);
+  if (!d) return;
+  page = d.page; renderPosts(d.items); renderPager(d.pages);
+}
+function renderPager(n) {   // nút chuyển trang
+  $("pager").innerHTML = n < 2 ? "" : `<button class="tab" ${page < 2 ? "disabled" : ""} onclick="go(${page - 1})">◀</button><span style="align-self:center">Trang ${page}/${n}</span><button class="tab" ${page >= n ? "disabled" : ""} onclick="go(${page + 1})">▶</button>`;
+}
+function go(n) { page = n; loadPosts(); scrollTo(0, 0); }
 
-      function switchBoard(boardKey) {
-          currentBoard = boardKey;
-          fetchBoards();
-          fetchPosts();
-      }
+function cmts(p) {
+  const by = {}; p.comments.forEach(c => (by[c.parent || 0] ??= []).push(c));
+  const draw = (pid, d) => (by[pid] || []).map(c => `
+    <div class="comment-item" style="margin-left:${d * 18}px">
+      <div>${avatar(c.author, c.frame)}</div>
+      <div style="white-space:pre-wrap;word-break:break-word">${esc(c.content)}</div>
+      <div class="cm-act">
+        <span class="${c.my == 1 ? "on" : ""}" onclick="vote('comments',${c.id},1)">▲</span> ${c.score}
+        <span class="${c.my == -1 ? "on" : ""}" onclick="vote('comments',${c.id},-1)">▼</span> ·
+        <span onclick="setReply(${p.id},${c.id})">Trả lời</span> ·
+        <span onclick="rep('comments',${c.id})">🚩 ${c.reports}</span>
+      </div>
+    </div>${draw(c.id, Math.min(d + 1, 4))}`).join("");
+  return draw(0, 0);
+}
 
-      function renderPosts(posts) {
-          const container = document.getElementById("posts-container");
-          container.innerHTML = "";
+function renderPosts(posts) {
+  PC = Object.fromEntries(posts.map(p => [p.id, p.content]));   // cache nội dung cho nút Sửa
+  if (!posts.length) { $("posts").innerHTML = `<p style="text-align:center;color:var(--muted)">Chưa có bài viết nào.</p>`; return; }
+  $("posts").innerHTML = posts.map(p => `
+    <div class="post-card">
+      <div class="vote"><span class="${p.my == 1 ? "on" : ""}" onclick="vote('posts',${p.id},1)">▲</span>${p.score}<span class="${p.my == -1 ? "on" : ""}" onclick="vote('posts',${p.id},-1)">▼</span></div>
+      <div class="body">
+        <div class="meta">/${esc(p.board)}/ • ${avatar(p.author, p.frame)}</div>
+        <p class="text">${esc(p.content)}</p>
+        ${p.image ? `<img class="post-img" src="${esc(p.image)}" alt="">` : ""}
+        ${p.board === "CF" ? `<div class="webscore">👥 Người dùng chấm: <b>${p.score}</b> · 🤖 Web chấm: <b>${p.web}</b> — <i>${esc(p.webnote)}</i></div>` : ""}
+        <div class="foot"><span onclick="toggle(${p.id})">💬 ${p.comments.length} Bình luận</span><span style="color:#f44" onclick="rep('posts',${p.id})">🚩 Báo cáo (${p.reports})</span>${me && (me === p.author || isAdmin) ? `<span onclick="editPost(${p.id})">✏️ Sửa</span><span onclick="delPost(${p.id})">🗑 Xóa</span>` : ""}</div>
+        <div class="comments" id="cb-${p.id}" style="display:${openC.has(p.id) ? "block" : "none"}">
+          ${cmts(p)}
+          ${me ? `<div class="cform"><input id="cc-${p.id}" placeholder="${replyTo[p.id] ? "Trả lời bình luận #" + replyTo[p.id] : "Viết bình luận..."}" maxlength="500" autocomplete="off">
+                  <button class="btn" onclick="sendC(${p.id})">Gửi</button></div>`
+               : `<p class="hint">Đăng nhập để bình luận / vote.</p>`}
+        </div>
+      </div>
+    </div>`).join("");
+}
 
-          if (posts.length === 0) {
-              container.innerHTML = `<p style="text-align:center; color:var(--muted);">Chưa có bài viết nào ở danh mục này.</p>`;
-              return;
-          }
+function toggle(id) { const b = $("cb-" + id); const o = b.style.display === "none"; b.style.display = o ? "block" : "none"; o ? openC.add(id) : openC.delete(id); }
+function setReply(pid, cid) { replyTo[pid] = cid; openC.add(pid); const i = $("cc-" + pid); if (i) { i.placeholder = "Trả lời bình luận #" + cid; i.focus(); } }
+async function vote(kind, id, v) { await api(`/api/${kind}/${id}/vote`, {value: v}); loadPosts(); loadLB(); }
+async function rep(kind, id) {
+  if (!confirm("Xem kĩ lại trước khi báo cáo nha!")) return;
+  if (await api(`/api/${kind}/${id}/report`, {})) { alert("Đã ghi nhận báo cáo nhen!"); loadPosts(); }
+}
+async function sendC(pid) {
+  const content = $("cc-" + pid).value; if (!content.trim()) return;
+  openC.add(pid);
+  await api(`/api/posts/${pid}/comments`, {content, parent: replyTo[pid] || null});
+  delete replyTo[pid]; loadPosts();
+}
 
-          posts.forEach(post => {
-              let commentsHtml = "";
-              post.comments.forEach(c => {
-                  commentsHtml += `
-                      <div class="comment-item">
-                          <strong>${escapeHtml(c.author)}:</strong> ${escapeHtml(c.content)}
-                      </div>
-                  `;
-              });
+function setLB(t) { lbType = t; $("t-cf").classList.toggle("active", t === "cf"); $("t-cf4").classList.toggle("active", t === "cf4"); loadLB(); }
+async function loadLB() {
+  const d = await api("/api/leaderboard?type=" + lbType); if (!d) return;
+  if (!d.length) { $("lb").innerHTML = `<p class="hint">Chưa có ai.</p>`; return; }
+  $("lb").innerHTML = d.map(r => lbType === "cf"
+    ? `<div class="lb-item"><div class="lb-row"><span>#${r.rank} ${avatar(r.author, r.frame)}</span><b style="color:var(--accent)">${r.total} đ</b></div>
+       <small>👥 ${r.user} + 🤖 ${r.web} · ${r.posts} bài</small></div>`
+    : `<div class="lb-item"><div class="lb-row"><span>#${r.rank} ${avatar(r.author, r.frame)}</span><b style="color:var(--accent)">${r.web} đ</b></div>
+       <small>${r.attempts} lần phá hoại · 🤖 ${esc(r.note)}</small><code>${esc(r.last)}</code></div>`).join("");
+}
 
-              container.innerHTML += `
-                  <div class="post-card">
-                      <div class="vote-section">
-                          <button class="vote-btn" onclick="vote(${post.id}, 1)">▲</button>
-                          <span class="score-display">${post.score}</span>
-                          <button class="vote-btn" onclick="vote(${post.id}, -1)">▼</button>
-                      </div>
-                      <div class="post-body-content">
-                          <div class="post-meta">/${post.board}/ • Đăng bởi <strong>${escapeHtml(post.author)}</strong></div>
-                          <p class="post-text">${escapeHtml(post.content)}</p>
-                          <div class="post-footer-actions">
-                              <span onclick="toggleComments(${post.id})">💬 ${post.comments.length} Bình luận</span>
-                              <span onclick="reportPost(${post.id})" style="color: #ff4444; font-weight: normal;">🚩 Báo cáo</span>
-                          </div>
-                          <div class="comments-section" id="comments-box-${post.id}" style="display:none;">
-                              <div id="comments-list-${post.id}">
-                                  ${commentsHtml}
-                              </div>
-                              <form class="comment-form" onsubmit="submitComment(event, ${post.id})">
-                                  <input type="text" id="c-author-${post.id}" placeholder="Tên..." style="max-width: 120px;" required>
-                                  <input type="text" id="c-content-${post.id}" placeholder="Viết bình luận..." required autocomplete="off">
-                                  <button type="submit" class="btn" style="padding: 6px 14px; font-size: 0.9rem;">Gửi</button>
-                              </form>
-                          </div>
-                      </div>
-                  </div>
-              `;
-          });
-      }
+// ---------- Hồ sơ người dùng: bấm vào tên bất kỳ ----------
+document.addEventListener("click", e => { const u = e.target.dataset && e.target.dataset.u; if (u) profile(u); });
+async function profile(name) {
+  const d = await api("/api/profile?u=" + encodeURIComponent(name)); if (!d) return;
+  const w = $("profile"); w.style.display = "block";
+  w.innerHTML = `<h3>👤 Hồ sơ</h3>${avatar(d.user, d.frame)}
+    <small>Tổng điểm: <b>${d.user_score + d.web_score}</b> (👥 ${d.user_score} + 🤖 ${d.web_score}) · Điểm bình luận: ${d.comment_score} · Bị bắt payload: ${d.hacks} lần</small>
+    <small><b>Bài gần đây</b></small>${d.posts.map(p => `<small>/${esc(p.board)}/ ${esc(p.content)} — ${p.score}${p.web != null ? " | 🤖 " + p.web : ""}</small>`).join("") || "<small>Chưa có</small>"}
+    <small><b>Bình luận gần đây</b></small>${d.comments.map(c => `<small>#${c.post}: ${esc(c.content)} (${c.score})</small>`).join("") || "<small>Chưa có</small>"}`;
+}
+// ---------- Sửa / xóa bài, đổi mật khẩu ----------
+async function editPost(id) {
+  const c = prompt("Sửa nội dung:", PC[id]); if (c === null) return;
+  if (await api(`/api/posts/${id}/edit`, {content: c})) loadPosts();
+}
+async function delPost(id) { if (confirm("Xóa bài này?") && await api(`/api/posts/${id}/delete`, {})) { loadPosts(); loadLB(); } }
+async function chpw() {
+  const old = prompt("Mật khẩu cũ:"), nw = old && prompt("Mật khẩu mới (≥ 6 ký tự):");
+  if (nw && await api("/api/password", {old, new: nw})) alert("Đã đổi mật khẩu!");
+}
 
-      async function vote(postId, value) {
-          await fetch(`/api/posts/${postId}/vote`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ value })
-          });
-          fetchPosts();
-          fetchLeaderboard();
-      }
-      async function reportPost(postId) {
-          if (!confirm("Xem kĩ lại trước khi báo cáo nha!")) return;
-          
-          const res = await fetch(`/api/posts/${postId}/report`, { method: "POST" });
-          if (res.ok) {
-              alert("Đã ghi nhận báo cáo nhen!");
-              fetchPosts();
-          }
-      }
-      function toggleComments(postId) {
-          const box = document.getElementById(`comments-box-${postId}`);
-          box.style.display = box.style.display === "none" ? "block" : "none";
-      }
+$("post-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const f = $("img").files[0];
+  if (f && f.size > 2_000_000) return alert("Ảnh tối đa 2MB");
+  const image = f ? await new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(f); }) : null;
+  const d = await api("/api/posts", {board: $("board-select").value, content: $("content").value, image});
+  if (d) { $("content").value = ""; $("img").value = ""; }
+  loadPosts(); loadLB();
+});
+$("search-form").addEventListener("submit", e => { e.preventDefault(); query = $("q").value.trim(); page = 1; loadPosts(); });
 
-      async function submitComment(e, postId) {
-          e.preventDefault();
-          const author = document.getElementById(`c-author-${postId}`).value;
-          const content = document.getElementById(`c-content-${postId}`).value;
-
-          await fetch(`/api/posts/${postId}/comments`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ author, content })
-          });
-          fetchPosts();
-      }
-
-      document.getElementById("post-form").addEventListener("submit", async (e) => {
-          e.preventDefault();
-          const board = document.getElementById("board-select").value;
-          const author = document.getElementById("author-input").value;
-          const content = document.getElementById("content-input").value;
-
-          await fetch("/api/posts", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ board, author, content })
-          });
-
-          document.getElementById("content-input").value = "";
-          fetchPosts();
-          fetchLeaderboard();
-      });
-
-      function escapeHtml(str) {
-          return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      }
-
-      init();
-  </script>
+async function refresh() { await loadMe(); await loadBoards(); await loadPosts(); await loadLB(); }
+refresh();
+</script>
 </body>
 </html>
