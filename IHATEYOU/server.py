@@ -8,7 +8,7 @@ BASE = Path(__file__).parent
 DATA, UP, ST = BASE / "data.json", BASE / "uploads", BASE / "static"
 UP.mkdir(exist_ok=True); ST.mkdir(exist_ok=True)
 
-RICK = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+RICK = "https://youtu.be/dQw4w9WgXcQ"
 WEEK, PRO, LIM = 7 * 86400, 200, 10   # 1 tuần | điểm đạt khung PRO | ngưỡng ban/report
 HIDDEN = "H"                          # board ẩn: lưu "chiến tích" của hacker
 HONEY = {"/api/admin", "/admin", "/.env", "/wp-login.php", "/phpmyadmin"}

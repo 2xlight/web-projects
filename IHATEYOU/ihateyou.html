@@ -15,6 +15,48 @@
   --bg-hover: #2a2a2a;
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
+.btn {
+  background-color: var(--accent); /* Đổi màu nền (dùng biến màu cam hoặc mã màu tùy ý) */
+  color: #fff;                     /* Màu chữ */
+  border: none;
+  padding: 10px 20px;
+  font-weight: bold;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.btn:hover {
+  background-color: #ff3300;       /* Màu nền khi rê chuột vào */
+}
+.tab {
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.tab.active, .tab:hover {
+  background: var(--accent);
+  color: #fff;
+}
+/* Áp dụng chung cho mọi thẻ link <a> */
+a {
+  color: var(--accent);       /* Màu chữ của link */
+  text-decoration: none;      /* Bỏ gạch chân mặc định */
+}
+
+a:hover {
+  text-decoration: underline; /* Hiển thị gạch chân khi rê chuột */
+  opacity: 0.8;
+}
+
+/* Hoặc chỉ định riêng cho link ở footer */
+footer a {
+  color: var(--muted);        /* Màu nhạt hơn cho footer */
+}
+
+footer a:hover {
+  color: var(--accent);       /* Sáng lên khi rê chuột */
+}
 *{box-sizing:border-box}
 body{margin:0;padding:20px;min-height:100vh;display:flex;flex-direction:column;align-items:center;background:var(--paper);color:var(--text);font-family:var(--font)}
 
@@ -87,7 +129,7 @@ h1{margin:0;font-size:1.5rem;color:var(--accent)}
         <textarea id="content" placeholder="Comeout đi..."></textarea>
         <input type="file" id="img" accept="image/png,image/jpeg,image/gif,image/webp" style="margin-bottom:10px">
         <div class="hint" id="guest-hint"></div>
-        <button class="btn">Đăng lên Board</button>
+        <button class="btn">Post</button>
       </form>
     </div>
     <div id="posts"></div>
@@ -98,7 +140,7 @@ h1{margin:0;font-size:1.5rem;color:var(--accent)}
     <div class="widget prof" id="profile" style="display:none"></div>
     <div class="widget"><h3>Danh mục (Boards)</h3><div class="board-list" id="nav"></div></div>
     <div class="widget">
-      <h3>🏆 Bảng Xếp Hạng</h3>
+      <h3>Bảng Xếp Hạng</h3>
       <div class="tabs">
         <button class="tab active" id="t-cf" onclick="setLB('cf')">Chí Fèo</button>
         <button class="tab" id="t-cf4" onclick="setLB('cf4')">Chí Fèo 4.0</button>
@@ -107,7 +149,7 @@ h1{margin:0;font-size:1.5rem;color:var(--accent)}
     </div>
   </div>
 </div>
-<footer><a href="/api/admin">/api/admin</a></footer>
+<footer><a href="/api/admin">/api/admin</a>https://youtu.be/dQw4w9WgXcQ</footer>
 
 <script>
 const $ = id => document.getElementById(id);
