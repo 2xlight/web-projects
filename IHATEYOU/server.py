@@ -1,4 +1,5 @@
-import json, re, time, secrets, hashlib, random, base64, threading
+import json, re, time, secrets, hashlib, random, base64, threading, os, shutil, ipaddress
+from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from http.cookies import SimpleCookie
 from pathlib import Path
@@ -8,8 +9,12 @@ BASE = Path(__file__).parent
 DATA, UP, ST = BASE / "data.json", BASE / "uploads", BASE / "static"
 UP.mkdir(exist_ok=True); ST.mkdir(exist_ok=True)
 
-RICK = "https://youtu.be/dQw4w9WgXcQ"
+RICK = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 WEEK, PRO, LIM = 7 * 86400, 200, 10   # 1 tuần | điểm đạt khung PRO | ngưỡng ban/report
+# Giới hạn chống spam / chống đầy ổ đĩa (chỉnh bằng biến môi trường):
+MAX_UP = int(os.environ.get("IHY_MAX_UPLOAD_MB", "500")) * 2**20   # tổng dung lượng thư mục uploads/
+MAX_USERS = int(os.environ.get("IHY_MAX_USERS", "2000"))           # tổng số tài khoản
+LIMITS = {"reg": (3, 86400), "post": (5, 600), "img": (5, 3600), "cmt": (10, 300)}   # (số lần, trong bao nhiêu giây)
 HIDDEN = "H"                          # board ẩn: lưu "chiến tích" của hacker
 HONEY = {"/api/admin", "/admin", "/.env", "/wp-login.php", "/phpmyadmin"}
 MIME = {"png": "image/png", "jpg": "image/jpeg", "gif": "image/gif", "webp": "image/webp"}
@@ -34,12 +39,42 @@ def sniff(b):  # kiểm tra magic bytes, không tin tên file / mime client gử
 
 # ---------- State ----------
 S = {"users": {}, "posts": [], "banned": {}, "muted": {}, "gt": {}, "pid": 1, "cid": 1}
-if DATA.exists(): S.update(json.loads(DATA.read_text("utf-8")))
+def load_state():
+    """Đọc data.json; nếu hỏng thì giữ lại bản hỏng (*.corrupt) và thử lần lượt các backup mới nhất."""
+    for f in [DATA] + sorted((DATA.parent / "backups").glob("data-*.json"), reverse=True):
+        try:
+            if f.exists(): S.update(json.loads(f.read_text("utf-8"))); return
+        except Exception:
+            print(f"[WARN] không đọc được {f.name}, thử bản khác")
+            shutil.copy(f, f.with_name(f.name + ".corrupt"))
+load_state()
 sessions, fails = {}, {}
 
-def save(): DATA.write_text(json.dumps(S, ensure_ascii=False), "utf-8")
+_last_bk = [0.0]
+def save():
+    """Ghi nguyên tử: ghi ra file tạm -> fsync -> os.replace (đổi tên 1 phát). Mất điện giữa chừng
+    thì data.json cũ vẫn nguyên vẹn. Mỗi giờ chép thêm 1 bản vào backups/ (giữ 48 bản gần nhất)."""
+    tmp = DATA.with_name(DATA.name + ".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(S, f, ensure_ascii=False); f.flush(); os.fsync(f.fileno())
+    os.replace(tmp, DATA)
+    if time.time() - _last_bk[0] > 3600:
+        bk = DATA.parent / "backups"; bk.mkdir(exist_ok=True)
+        shutil.copy(DATA, bk / time.strftime("data-%Y%m%d-%H%M.json"))
+        for old in sorted(bk.glob("data-*.json"))[:-48]: old.unlink()
+        _last_bk[0] = time.time()
 def nid(k): S[k] += 1; return S[k] - 1
 def now(): return time.time()
+
+# ---------- Giới hạn tốc độ (lưu trong RAM, reset khi restart) ----------
+_rate = {}
+def limited(key, limit, window):
+    """True nếu `key` đã làm đủ `limit` lần trong `window` giây. Nếu chưa quá thì ghi nhận lần này."""
+    if len(_rate) > 20000: _rate.clear()                 # chống phình RAM
+    q = _rate.setdefault(key, deque()); t = now()
+    while q and q[0] < t - window: q.popleft()           # bỏ các lần đã quá cũ
+    if len(q) >= limit: return True
+    q.append(t); return False
 def hashpw(pw, salt): return hashlib.pbkdf2_hmac("sha256", pw.encode(), bytes.fromhex(salt), 200_000).hex()
 def uscore(o): return sum(o["uv"].values())          # điểm do NGƯỜI DÙNG vote
 def mkey(author, ip): return author if author in S["users"] else "ip:" + ip
@@ -114,6 +149,7 @@ def save_img(d):
     ext = sniff(raw)
     if not ext or head.split(";")[0] != "data:image/" + {"jpg": "jpeg"}.get(ext, ext): return "rick"
     if len(raw) > 2_000_000: return "big"
+    if sum(f.stat().st_size for f in UP.iterdir()) + len(raw) > MAX_UP: return "full"   # hết hạn mức dung lượng
     name = secrets.token_hex(8) + "." + ext          # tên ngẫu nhiên, bỏ qua tên client
     (UP / name).write_bytes(raw)
     return "/uploads/" + name
@@ -128,8 +164,26 @@ class H(BaseHTTPRequestHandler):
         for k, v in {"Content-Type": ctype, "Content-Length": str(len(b)), "X-Content-Type-Options": "nosniff",
                      "Content-Security-Policy": "default-src 'self'; img-src 'self' data:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"}.items():
             self.send_header(k, v)
+        if self.https(): self.send_header("Strict-Transport-Security", "max-age=31536000")
         if cookie: self.send_header("Set-Cookie", cookie)
         self.end_headers(); self.wfile.write(b)
+
+    def trusted(self):
+        """Request đến từ proxy chạy cùng máy (cloudflared/nginx)? Chỉ khi đó mới tin header IP / https."""
+        return self.client_address[0] in ("127.0.0.1", "::1")
+
+    def real_ip(self):
+        """IP thật của người dùng. Qua proxy cục bộ thì đọc CF-Connecting-IP (Cloudflare tự ghi đè nên không giả được)
+        hoặc X-Real-IP (nginx). KHÔNG dùng X-Forwarded-For vì client tự thêm giả được."""
+        if self.trusted():
+            for h in ("CF-Connecting-IP", "X-Real-IP"):
+                try: return str(ipaddress.ip_address(self.headers.get(h, "").strip()))   # phải là IP hợp lệ
+                except ValueError: pass
+        return self.client_address[0]
+
+    def https(self):
+        """Đang chạy sau HTTPS? (biến IHY_SECURE=1, hoặc proxy báo X-Forwarded-Proto: https)"""
+        return os.environ.get("IHY_SECURE") == "1" or (self.trusted() and self.headers.get("X-Forwarded-Proto") == "https")
 
     def sid(self):
         c = SimpleCookie(self.headers.get("Cookie", ""))
@@ -237,7 +291,7 @@ class H(BaseHTTPRequestHandler):
 
     def go(self, m):
         with L:
-            self.ip = self.client_address[0]
+            self.ip = self.real_ip()
             try:
                 u = urlparse(self.path); p = u.path; me = sessions.get(self.sid())
                 if S["banned"].get(self.ip, 0) > now():
@@ -298,6 +352,8 @@ class H(BaseHTTPRequestHandler):
                 if not re.fullmatch(r"\w{3,20}", u, re.A) or len(pw) < 6:
                     return self.out({"error": "Username 3-20 ký tự (chữ/số/_), mật khẩu ≥ 6 ký tự"}, 400)
                 if u in S["users"]: return self.out({"error": "Username đã tồn tại"}, 409)
+                if len(S["users"]) >= MAX_USERS: return self.out({"error": "Web đã đủ thành viên."}, 503)
+                if limited("reg:" + ip, *LIMITS["reg"]): return self.out({"error": "IP này đăng ký quá nhiều tài khoản, thử lại sau 24h."}, 429)
                 salt = secrets.token_hex(8)
                 S["users"][u] = {"salt": salt, "hash": hashpw(pw, salt), "hacks": 0, "ts": now()}; save()
             else:
@@ -309,7 +365,7 @@ class H(BaseHTTPRequestHandler):
                     return self.out({"error": f"Sai tài khoản/mật khẩu ({fails[ip]}/{LIM})"}, 401)
                 fails.pop(ip, None)
             sid = secrets.token_hex(24); sessions[sid] = u
-            return self.out({"user": u}, cookie=f"sid={sid}; HttpOnly; SameSite=Strict; Path=/; Max-Age={WEEK}")
+            return self.out({"user": u}, cookie=f"sid={sid}; HttpOnly; SameSite=Strict; Path=/; Max-Age={WEEK}" + ("; Secure" if self.https() else ""))
 
         if p == "/api/posts":
             board, content, img = d.get("board"), str(d.get("content", "")).strip()[:2000], d.get("image")
@@ -317,11 +373,16 @@ class H(BaseHTTPRequestHandler):
             k = scan(content)
             if k: return self.caught(k, "post", content, me)
             if S["muted"].get(mkey(me or "", ip), 0) > now(): return self.out({"error": "Bạn đang bị NOOB: cấm đăng 1 tuần."}, 403)
+            if me and not is_admin(me) and limited("post:" + me, *LIMITS["post"]):
+                return self.out({"error": f"Đăng chậm thôi! Tối đa {LIMITS['post'][0]} bài / {LIMITS['post'][1] // 60} phút."}, 429)
             if not me:                                   # khách: 1 post / IP, spam >10 lần → ban
                 n = S["gt"][ip] = S["gt"].get(ip, 0) + 1; save()
                 if n > LIM: ban(ip); return self.out({"error": "Spam hả? Ban IP 1 tuần."}, 403)
                 if n > 1: return self.out({"error": "Khách chỉ được đăng 1 bài / IP. Đăng nhập đi cưng."}, 429)
+            if img and me and not is_admin(me) and limited("img:" + me, *LIMITS["img"]):
+                return self.out({"error": "Upload ảnh quá nhanh, thử lại sau."}, 429)
             path = save_img(img)
+            if path == "full": return self.out({"error": "Kho ảnh đã đầy, tạm thời chỉ đăng chữ nhé."}, 507)
             if path == "rick": return self.out({"error": "Định dạng ảnh lạ lắm nha cưng 😏", "rickroll": RICK}, 415)
             if path == "big": return self.out({"error": "Ảnh tối đa 2MB"}, 413)
             post = {"id": nid("pid"), "board": board, "author": me or "Khách-" + hashlib.sha1(ip.encode()).hexdigest()[:5],
@@ -344,6 +405,7 @@ class H(BaseHTTPRequestHandler):
             k = scan(content)
             if k: return self.caught(k, "comment", content, me)
             if S["muted"].get(me, 0) > now(): return self.out({"error": "Bạn đang bị NOOB: cấm bình luận 1 tuần."}, 403)
+            if not is_admin(me) and limited("cmt:" + me, *LIMITS["cmt"]): return self.out({"error": "Bình luận chậm thôi!"}, 429)
             par = d.get("parent")
             c = {"id": nid("cid"), "author": me, "content": content, "ts": now(), "uv": {}, "rep": [], "ip": ip,
                  "parent": par if par in [x["id"] for x in post["comments"]] else None}
@@ -367,5 +429,6 @@ class H(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     init_admin()
-    print("Server running at http://127.0.0.1:8000")
-    ThreadingHTTPServer(("127.0.0.1", 8000), H).serve_forever()
+    HOST, PORT = os.environ.get("IHY_HOST", "127.0.0.1"), int(os.environ.get("IHY_PORT", "8000"))
+    print(f"Server running at http://{HOST}:{PORT}")
+    ThreadingHTTPServer((HOST, PORT), H).serve_forever()

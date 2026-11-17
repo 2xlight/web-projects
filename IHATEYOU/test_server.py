@@ -26,15 +26,17 @@ class T(unittest.TestCase):
     def setUp(self):  # reset toàn bộ trạng thái trước mỗi test
         server.S.clear(); server.S.update({"users": {}, "posts": [], "banned": {}, "muted": {}, "gt": {}, "pid": 1, "cid": 1})
         server.fails.clear(); server.sessions.clear(); server.init_admin()
+        server._rate.clear(); server.MAX_UP = 500 * 2**20
+        server.LIMITS.update({k: (10**6, 1) for k in server.LIMITS})   # mặc định thoải mái; test giới hạn sẽ tự đặt lại
 
     # ----- helpers -----
-    def req(self, method, path, body=None, sid=None, ua="unittest"):
+    def req(self, method, path, body=None, sid=None, ua="unittest", hdr=None):
         c = http.client.HTTPConnection("127.0.0.1", self.port)
-        h = {"User-Agent": ua}
+        h = {"User-Agent": ua, **(hdr or {})}
         if body is not None: h["Content-Type"] = "application/json"
         if sid: h["Cookie"] = "sid=" + sid
         c.request(method, path, json.dumps(body) if body is not None else None, h)
-        r = c.getresponse(); raw = r.read().decode()
+        r = c.getresponse(); raw = r.read().decode("utf-8", "replace")
         try: data = json.loads(raw)
         except ValueError: data = raw
         return r.status, data, r.getheader("Set-Cookie")
@@ -110,28 +112,28 @@ class T(unittest.TestCase):
 
     # ----- khách không vote/comment -----
     def test_guest_cannot_vote(self):
-        pid = self.post(self.user("a"))[1]["id"]
+        pid = self.post(self.user("aaa"))[1]["id"]
         self.assertEqual(self.req("POST", f"/api/posts/{pid}/vote", {"value": 1})[0], 401)
 
     # ----- phân trang, sửa/xóa, đổi mật khẩu -----
     def test_pagination(self):
-        sid = self.user("a")
+        sid = self.user("aaa")
         for i in range(25): self.post(sid, f"bài {i}")
         d = self.req("GET", "/api/posts?size=10&page=3")[1]
         self.assertEqual((d["page"], d["pages"], len(d["items"])), (3, 3, 5))
 
     def test_edit_delete_permissions(self):
-        a, b = self.user("a"), self.user("b"); pid = self.post(a, "gốc")[1]["id"]
+        a, b = self.user("aaa"), self.user("bbb"); pid = self.post(a, "gốc")[1]["id"]
         self.assertEqual(self.req("POST", f"/api/posts/{pid}/edit", {"content": "hack"}, b)[0], 403)
         self.assertEqual(self.req("POST", f"/api/posts/{pid}/edit", {"content": "mới"}, a)[1]["content"], "mới")
         self.assertEqual(self.req("POST", f"/api/posts/{pid}/delete", {}, a)[0], 200)
         self.assertEqual(self.req("GET", "/api/posts")[1]["items"], [])
 
     def test_change_password(self):
-        sid = self.user("a", "oldpass1")
+        sid = self.user("aaa", "oldpass1")
         self.assertEqual(self.req("POST", "/api/password", {"old": "sai", "new": "newpass1"}, sid)[0], 403)
         self.assertEqual(self.req("POST", "/api/password", {"old": "oldpass1", "new": "newpass1"}, sid)[0], 200)
-        self.assertEqual(self.req("POST", "/api/login", {"username": "a", "password": "newpass1"})[0], 200)
+        self.assertEqual(self.req("POST", "/api/login", {"username": "aaa", "password": "newpass1"})[0], 200)
 
     # ----- admin -----
     def test_admin_unban_and_permissions(self):
@@ -141,6 +143,40 @@ class T(unittest.TestCase):
         self.assertEqual(self.req("GET", "/api/mod/bans", sid=sid)[1][0]["ip"], "1.2.3.4")
         self.assertEqual(self.req("POST", "/api/mod/unban", {"ip": "1.2.3.4"}, sid)[0], 200)
         self.assertEqual(self.req("GET", "/api/mod/bans", sid=sid)[1], [])
+
+    # ----- IP thật qua proxy, cookie Secure -----
+    def test_real_ip_from_proxy_header(self):
+        for _ in range(11): self.req("POST", "/api/posts", {"board": "r", "content": "x"}, hdr={"CF-Connecting-IP": "9.9.9.9"})
+        self.assertEqual(self.req("GET", "/api/boards", hdr={"CF-Connecting-IP": "9.9.9.9"})[0], 403)   # IP spam bị ban
+        self.assertEqual(self.req("GET", "/api/boards", hdr={"CF-Connecting-IP": "8.8.8.8"})[0], 200)   # người khác không bị vạ lây
+        self.assertEqual(self.req("GET", "/api/boards")[0], 200)
+
+    def test_cookie_secure_only_over_https(self):
+        ck = self.req("POST", "/api/register", {"username": "secureu", "password": "secret1"}, hdr={"X-Forwarded-Proto": "https"})[2]
+        self.assertIn("Secure", ck)
+        self.assertNotIn("Secure", self.req("POST", "/api/register", {"username": "plainu", "password": "secret1"})[2])
+
+    # ----- lưu dữ liệu an toàn -----
+    def test_corrupt_data_falls_back_to_backup(self):
+        self.user("keepme"); server._last_bk[0] = 0; server.save()   # ép tạo 1 bản backup
+        server.DATA.write_text("{hỏng", encoding="utf-8")            # giả lập file bị hỏng
+        server.S.clear(); server.load_state()
+        self.assertIn("keepme", server.S["users"])
+        self.assertFalse(server.DATA.with_name("data.json.tmp").exists())   # không để rác file tạm
+
+    # ----- chống spam cho người đã đăng nhập, kho ảnh -----
+    def test_post_rate_limit(self):
+        server.LIMITS["post"] = (5, 600); sid = self.user("poster")
+        self.assertEqual([self.post(sid)[0] for _ in range(7)], [201] * 5 + [429] * 2)
+
+    def test_register_limit_per_ip(self):
+        server.LIMITS["reg"] = (3, 86400)
+        codes = [self.req("POST", "/api/register", {"username": f"user{i}", "password": "secret1"})[0] for i in range(5)]
+        self.assertEqual(codes, [200] * 3 + [429] * 2)
+
+    def test_upload_disk_quota(self):
+        server.MAX_UP = 10   # 10 byte: ảnh nào cũng vượt
+        self.assertEqual(self.post(self.user("alice"), "x", image=PNG)[0], 507)
 
 if __name__ == "__main__":
     unittest.main()
